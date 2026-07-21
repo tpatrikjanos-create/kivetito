@@ -1,0 +1,3339 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#081420">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Reactivity — Kivetítő</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+:root{
+  --bg:#081420;--sf:#0c1f2e;--sf2:#123049;
+  --gold:#1ec8ff;--gold2:#0e6fa8;
+  --border:rgba(255,255,255,.09);
+  --muted:rgba(255,255,255,.52);
+  --muted-lo:rgba(255,255,255,.4);
+  --disp:'Bebas Neue',sans-serif;
+  --ease-spring:cubic-bezier(.34,1.56,.64,1);
+  --ease-out:cubic-bezier(.16,1,.3,1);
+}
+html,body{height:100%;background:var(--bg);color:#fff;font-family:'Nunito',sans-serif;overflow:hidden}
+
+/* ══════════════════ AMBIENT GLOW LAYER (dísz, mélységérzet) ══════════════════ */
+#ambient{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+#ambient span{position:absolute;border-radius:50%;opacity:.28;will-change:transform}
+#ambient span:nth-child(1){width:44vmax;height:44vmax;left:-16vmax;top:-18vmax;background:radial-gradient(circle,#6C4CD6,transparent 68%);animation:drift1 26s ease-in-out infinite}
+#ambient span:nth-child(2){width:36vmax;height:36vmax;right:-14vmax;top:6vmax;background:radial-gradient(circle,var(--gold2),transparent 68%);opacity:.14;animation:drift2 32s ease-in-out infinite}
+#ambient span:nth-child(3){width:38vmax;height:38vmax;left:18vw;bottom:-22vmax;background:radial-gradient(circle,#2F80ED,transparent 68%);opacity:.12;animation:drift3 38s ease-in-out infinite}
+@keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(6vmax,8vmax) scale(1.12)}}
+@keyframes drift2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-7vmax,5vmax) scale(1.08)}}
+@keyframes drift3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(5vmax,-6vmax) scale(1.1)}}
+@media (prefers-reduced-motion: reduce){
+  #ambient span{animation:none!important}
+}
+
+/* ══════════════════ SETUP SCREEN ══════════════════ */
+#setup{
+  position:fixed;inset:0;z-index:20;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;
+  padding:2rem 1.25rem 2rem;gap:1.2rem;overflow-y:auto
+}
+.logo{
+  font-family:'Bebas Neue',sans-serif;font-weight:900;font-size:clamp(1.6rem,5vw,2.8rem);
+  background:linear-gradient(135deg,var(--gold),var(--gold2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 18px rgba(30,200,255,.35));text-align:center
+}
+.logo-sub{
+  font-size:.68rem;letter-spacing:.4em;text-transform:uppercase;
+  color:rgba(255,255,255,.5);text-align:center;margin-top:.25rem
+}
+.scard{
+  background:var(--sf);border-radius:18px;padding:1.2rem 1.4rem;
+  width:100%;max-width:600px;border:1px solid rgba(255,255,255,.07)
+}
+.slabel{
+  font-size:.62rem;letter-spacing:.32em;text-transform:uppercase;
+  color:rgba(255,255,255,.55);margin-bottom:.85rem
+}
+.cnt-row{display:flex;gap:.45rem;flex-wrap:wrap}
+.cb{
+  width:48px;height:48px;border-radius:12px;cursor:pointer;transition:all .2s;
+  border:2px solid rgba(255,255,255,.1);background:var(--sf2);
+  color:rgba(255,255,255,.4);font-family:'Bebas Neue',sans-serif;font-size:1rem;font-weight:700
+}
+.cb.on{
+  background:linear-gradient(135deg,var(--gold),var(--gold2));
+  border-color:transparent;color:#000;box-shadow:0 4px 14px rgba(30,200,255,.4)
+}
+.cb:active{transform:scale(.9)}
+.name-grid{display:flex;flex-direction:column;gap:.7rem}
+.field-label{
+  display:block;font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;
+  color:rgba(255,255,255,.4);font-weight:800;margin-bottom:.3rem
+}
+.team-block{
+  background:rgba(0,0,0,.22);border-radius:12px;padding:.7rem;
+  border-left:4px solid;display:flex;flex-direction:column;gap:.45rem
+}
+.name-inp{
+  padding:.6rem .9rem;border-radius:9px;border:2px solid rgba(255,255,255,.12);
+  background:rgba(0,0,0,.3);color:#fff;
+  font-family:'Nunito',sans-serif;font-size:.95rem;font-weight:800;
+  outline:none;width:100%;transition:border-color .2s
+}
+.name-inp:focus{background:rgba(0,0,0,.5)}
+.players-inp{
+  padding:.55rem .9rem;border-radius:9px;border:1.5px solid rgba(255,255,255,.1);
+  background:rgba(0,0,0,.25);color:rgba(255,255,255,.85);
+  font-family:'Nunito',sans-serif;font-size:.85rem;font-weight:600;
+  outline:none;width:100%;resize:vertical;min-height:2.4rem;line-height:1.5;
+  transition:border-color .2s
+}
+.players-inp:focus{background:rgba(0,0,0,.45);border-color:rgba(255,255,255,.25)}
+.players-inp::placeholder{opacity:.35;font-weight:600}
+.go-btn{
+  width:100%;max-width:600px;padding:1.1rem;border-radius:14px;border:none;
+  background:linear-gradient(135deg,var(--gold),var(--gold2));color:#000;
+  font-family:'Bebas Neue',sans-serif;font-size:1rem;font-weight:900;letter-spacing:.08em;
+  cursor:pointer;box-shadow:0 5px 26px rgba(30,200,255,.45);transition:all .2s
+}
+.go-btn:active{transform:scale(.97)}
+
+/* Rabló App QR kód modal */
+#qr-modal{display:none;position:fixed;inset:0;z-index:970;background:rgba(8,10,16,.97);backdrop-filter:blur(8px);align-items:center;justify-content:center}
+#qr-modal.open{display:flex}
+.qr-box{background:#1b1c22;border-radius:20px;padding:24px;max-width:340px;width:90vw;display:flex;flex-direction:column;align-items:center;gap:12px;position:relative}
+.qr-close{position:absolute;top:12px;right:12px;background:#2a2b33;border:none;color:#f4f5f7;padding:7px 12px;border-radius:9px;cursor:pointer;font-size:12px;font-weight:700}
+.qr-title{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:.08em;color:#f4f5f7}
+#qr-canvas-wrap{background:#fff;padding:10px;border-radius:12px}
+#qr-canvas-wrap table{border-collapse:collapse}
+#qr-url-input{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:#2a2b33;color:#f4f5f7;font:inherit;font-size:13px;text-align:center}
+.qr-hint{margin:0;font-size:12px;color:#9a9ca6;text-align:center;line-height:1.5}
+
+/* ══════════════════ BOARD SCREEN ══════════════════ */
+#board{display:none;position:fixed;inset:0}
+
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.6rem 1rem;flex-shrink:0;
+  position:fixed;top:0;left:0;right:0;z-index:50;
+  background:rgba(8,8,24,.97);backdrop-filter:blur(14px);
+  border-bottom:1px solid rgba(255,255,255,.09);
+  transform:translateY(-110%);transition:transform .38s cubic-bezier(.4,0,.2,1)
+}
+.topbar.visible{transform:translateY(0)}
+.tb-logo{font-family:'Bebas Neue',sans-serif;font-size:.9rem;font-weight:900;color:var(--gold)}
+.tb-right{display:flex;gap:.4rem}
+.tbb{
+  padding:.4rem .8rem;border-radius:8px;cursor:pointer;transition:all .2s;
+  border:1px solid rgba(255,255,255,.12);background:transparent;
+  color:rgba(255,255,255,.42);font-family:'Nunito',sans-serif;font-size:.78rem;font-weight:800
+}
+.tbb:hover{background:rgba(255,255,255,.07);color:#fff}
+.tbb:active{transform:scale(.94);background:rgba(255,255,255,.12)}
+.tbb.gold{border-color:rgba(30,200,255,.4);color:var(--gold)}
+.tbb.gold:active{background:rgba(30,200,255,.18)}
+.tbb.red{border-color:rgba(255,80,80,.28);color:rgba(255,120,120,.7)}
+.tbb.red:active{background:rgba(255,80,80,.18)}
+
+/* ── Ranked list ── */
+#rank-list{position:fixed;inset:0;display:flex;flex-direction:column;overflow:hidden}
+
+.rank-row{
+  flex:1;min-height:52px;
+  display:flex;align-items:center;
+  position:relative;overflow:hidden;
+  border-bottom:1px solid rgba(255,255,255,.04);
+  touch-action:none;cursor:pointer
+}
+.rank-row.enter{
+  opacity:0;transform:translateX(-24px);
+  animation:row-in .5s var(--ease-out) both;
+  animation-delay:calc(var(--i,0) * 45ms)
+}
+@keyframes row-in{to{opacity:1;transform:translateX(0)}}
+@media (prefers-reduced-motion: reduce){
+  .rank-row.enter{animation:none;opacity:1;transform:none}
+}
+.rank-row.r1{background:rgba(30,200,255,.04)}
+.rank-row.r2{background:rgba(200,200,200,.025)}
+.rank-row.r3{background:rgba(205,127,50,.025)}
+
+/* Touch-zone flash overlays — subtle, invisible from a distance */
+.flash{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .05s}
+.flash.left {background:linear-gradient(to right,rgba(255,50,50,.3) 0%,transparent 60%)}
+.flash.right{background:linear-gradient(to left ,rgba(50,220,100,.22) 0%,transparent 55%)}
+.flash.show{opacity:1}
+
+/* Rank badge */
+.rank-badge{
+  width:64px;flex-shrink:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.08rem
+}
+.medal{font-size:clamp(1.1rem,3.5vh,2rem);line-height:1;filter:drop-shadow(0 0 6px rgba(30,200,255,.5))}
+.rank-num{font-family:'Bebas Neue',sans-serif;font-size:.63rem;font-weight:700;color:rgba(255,255,255,.22)}
+
+/* Color stripe */
+.stripe{width:5px;align-self:stretch;flex-shrink:0;border-radius:0 3px 3px 0;transition:box-shadow .3s}
+
+/* Shockwave ring — pontváltozáskor a sor fölé */
+.shockring{position:absolute;inset:0;border:2px solid transparent;border-radius:0;pointer-events:none;opacity:0}
+.rank-row.shock .shockring{animation:shock-ring .6s var(--ease-out) both}
+.rank-row.shock .stripe{animation:stripe-flash .6s ease-out both}
+@keyframes shock-ring{
+  0%{opacity:.9;box-shadow:inset 0 0 0 0 currentColor;background:rgba(255,255,255,.05)}
+  100%{opacity:0;background:rgba(255,255,255,0)}
+}
+@keyframes stripe-flash{
+  0%{box-shadow:0 0 26px 4px currentColor}
+  100%{box-shadow:0 0 10px currentColor}
+}
+@media (prefers-reduced-motion: reduce){
+  .rank-row.shock .shockring,.rank-row.shock .stripe{animation:none}
+}
+
+/* Team content */
+.team-content{
+  flex:1;min-width:0;display:flex;align-items:center;
+  justify-content:space-between;padding:0 1rem 0 .85rem;gap:.5rem
+}
+.team-name{
+  font-family:'Bebas Neue',sans-serif;font-weight:700;letter-spacing:.02em;
+  font-size:clamp(.9rem,2.3vw,1.5rem);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1
+}
+.team-score{
+  font-family:'Bebas Neue',sans-serif;font-weight:900;font-variant-numeric:tabular-nums;
+  font-size:clamp(1.9rem,5vw,4.3rem);
+  white-space:nowrap;flex-shrink:0
+}
+.team-score.pop{animation:scorepop .5s cubic-bezier(.34,1.8,.64,1)}
+@keyframes scorepop{
+  0%{transform:scale(1)}
+  35%{transform:scale(1.55) rotate(-3deg)}
+  60%{transform:scale(.92) rotate(2deg)}
+  100%{transform:scale(1) rotate(0)}
+}
+
+/* Delta float (+5, -1 etc.) - nagy, látványos, bejövő pattanással */
+.delta{
+  position:absolute;right:.9rem;top:18%;
+  font-family:'Bebas Neue',sans-serif;font-size:clamp(1.6rem,4.2vw,3.1rem);font-weight:900;
+  letter-spacing:.02em;pointer-events:none;opacity:0;z-index:5
+}
+.delta.up{color:#2ECC71;text-shadow:0 0 22px rgba(46,204,113,.85),0 2px 6px rgba(0,0,0,.4);animation:float-up .95s cubic-bezier(.22,1.4,.36,1) forwards}
+.delta.dn{color:#E74C3C;text-shadow:0 0 22px rgba(231,76,60,.85),0 2px 6px rgba(0,0,0,.4);animation:float-dn .95s cubic-bezier(.22,1.4,.36,1) forwards}
+.delta.zero{color:#9a9ca6;text-shadow:0 0 16px rgba(154,156,166,.7),0 2px 6px rgba(0,0,0,.4);animation:float-dn .95s cubic-bezier(.22,1.4,.36,1) forwards}
+@keyframes float-up{
+  0%{opacity:0;transform:translateY(6px) scale(.3) rotate(-8deg)}
+  22%{opacity:1;transform:translateY(-6px) scale(1.35) rotate(4deg)}
+  40%{transform:translateY(-14px) scale(1.05) rotate(0)}
+  100%{opacity:0;transform:translateY(-68px) scale(1) rotate(0)}
+}
+@keyframes float-dn{
+  0%{opacity:0;transform:translateY(-6px) scale(.3) rotate(8deg)}
+  22%{opacity:1;transform:translateY(4px) scale(1.35) rotate(-4deg)}
+  40%{transform:translateY(10px) scale(1.05) rotate(0)}
+  100%{opacity:0;transform:translateY(38px) scale(1) rotate(0)}
+}
+@media (prefers-reduced-motion: reduce){
+  .team-score.pop{animation:none}
+  .delta.up,.delta.dn,.delta.zero{animation:none;opacity:0}
+}
+
+/* ── Increment bar ── */
+.inc-bar{
+  display:flex;align-items:center;justify-content:center;gap:.45rem;
+  padding:.55rem 1rem;
+  position:fixed;bottom:0;left:0;right:0;z-index:50;
+  background:rgba(8,8,24,.97);backdrop-filter:blur(14px);
+  border-top:1px solid rgba(255,255,255,.09);
+  transform:translateY(110%);transition:transform .38s cubic-bezier(.4,0,.2,1)
+}
+.inc-bar.visible{transform:translateY(0)}
+.inc-label{
+  font-size:.6rem;letter-spacing:.25em;text-transform:uppercase;
+  color:rgba(255,255,255,.28);font-weight:800
+}
+.inc-pill{
+  padding:.3rem .8rem;border-radius:20px;cursor:pointer;transition:all .2s;
+  border:1.5px solid rgba(255,255,255,.12);background:transparent;
+  color:rgba(255,255,255,.38);font-family:'Nunito',sans-serif;font-size:.82rem;font-weight:900
+}
+.inc-pill.on{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.35);color:#fff}
+.inc-pill:active{transform:scale(.9)}
+
+/* ══════════════════ WINNER OVERLAY ══════════════════ */
+#winner-overlay{
+  display:none;position:fixed;inset:0;z-index:60;
+  flex-direction:column;align-items:center;justify-content:center;gap:1.1rem;
+  background:rgba(0,0,0,.87);backdrop-filter:blur(10px);overflow:hidden
+}
+#winner-overlay::before{
+  content:'';position:absolute;inset:-50%;z-index:0;
+  background:conic-gradient(from 0deg,transparent 0deg,rgba(30,200,255,.16) 8deg,transparent 22deg,transparent 158deg,rgba(30,200,255,.12) 172deg,transparent 188deg,transparent 340deg,rgba(30,200,255,.14) 352deg,transparent 360deg);
+  animation:rays-spin 18s linear infinite;pointer-events:none
+}
+@keyframes rays-spin{to{transform:rotate(360deg)}}
+#winner-overlay::after{
+  content:'';position:fixed;inset:0;z-index:0;background:var(--gold);
+  opacity:0;pointer-events:none;animation:winner-flash 1.1s ease-out both
+}
+@keyframes winner-flash{0%{opacity:0}8%{opacity:.35}100%{opacity:0}}
+#winner-overlay>*{position:relative;z-index:1}
+@media (prefers-reduced-motion: reduce){
+  #winner-overlay::before{animation:none}
+  #winner-overlay::after{animation:none;opacity:0}
+}
+.w-eyebrow{
+  font-size:.75rem;letter-spacing:.5em;text-transform:uppercase;
+  color:rgba(255,255,255,.42);animation:blink 1.6s ease-in-out infinite
+}
+@keyframes blink{0%,100%{opacity:.42}50%{opacity:1}}
+.w-trophy{
+  font-size:5rem;
+  animation:trophy-in .9s cubic-bezier(.34,1.8,.64,1) both;
+  filter:drop-shadow(0 0 30px rgba(30,200,255,.8))
+}
+@keyframes trophy-in{0%{transform:scale(0) rotate(-20deg);opacity:0}100%{transform:scale(1) rotate(0);opacity:1}}
+.w-name{
+  font-family:'Bebas Neue',sans-serif;font-size:clamp(2.3rem,7.5vw,4.6rem);font-weight:900;
+  text-align:center;padding:0 2rem;
+  animation:name-in .55s .15s cubic-bezier(.34,1.4,.64,1) both
+}
+@keyframes name-in{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
+.w-score-label{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:rgba(255,255,255,.38)}
+.w-close{
+  margin-top:.6rem;padding:.85rem 2rem;border-radius:12px;
+  border:2px solid rgba(255,255,255,.18);background:transparent;
+  color:#fff;font-family:'Nunito',sans-serif;font-size:1rem;font-weight:800;cursor:pointer;transition:all .2s
+}
+.w-close:hover{background:rgba(255,255,255,.09)}
+
+/* ══════════════════ CONFETTI ══════════════════ */
+#confetti-canvas{position:fixed;inset:0;pointer-events:none;z-index:61;display:none}
+
+/* ══════════════════ NEXT-TEAM BUTTON ══════════════════ */
+#next-team-btn{
+  position:fixed;bottom:1rem;right:1rem;z-index:40;
+  width:48px;height:48px;border-radius:50%;cursor:pointer;
+  border:1.5px solid rgba(255,255,255,.18);
+  background:rgba(20,20,45,.55);backdrop-filter:blur(8px);
+  color:rgba(255,255,255,.5);font-size:1.1rem;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .25s;opacity:.55;line-height:1;padding-left:3px
+}
+#next-team-btn:hover{opacity:1;color:#fff;border-color:rgba(255,255,255,.4)}
+#next-team-btn:active{transform:scale(.9)}
+
+/* ══════════════════ TURN OVERLAY ══════════════════ */
+#turn-overlay{
+  display:none;position:fixed;inset:0;z-index:70;
+  flex-direction:column;align-items:center;justify-content:center;gap:1.2rem;
+  cursor:pointer;
+  background:rgba(0,0,0,.5)
+}
+#turn-overlay.show{display:flex}
+/* color tint set inline via --turn-color */
+#turn-overlay::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 50%,var(--turn-glow) 0%,transparent 70%);
+  animation:turn-pulse 2s ease-in-out infinite
+}
+@keyframes turn-pulse{0%,100%{opacity:.6}50%{opacity:1}}
+.turn-eyebrow{
+  position:relative;
+  font-size:clamp(.8rem,2.5vw,1.2rem);letter-spacing:.42em;text-transform:uppercase;
+  color:rgba(255,255,255,.7);font-weight:800;
+  animation:turn-eyebrow-in .4s ease both
+}
+@keyframes turn-eyebrow-in{0%{opacity:0;transform:translateY(-12px)}100%{opacity:1;transform:translateY(0)}}
+.turn-name{
+  position:relative;
+  font-family:'Bebas Neue',sans-serif;font-weight:900;
+  font-size:clamp(2.8rem,12vw,7.8rem);text-align:center;padding:0 1.5rem;line-height:1.05;
+  animation:turn-name-in .5s .1s cubic-bezier(.34,1.6,.64,1) both
+}
+@keyframes turn-name-in{0%{opacity:0;transform:scale(.5)}100%{opacity:1;transform:scale(1)}}
+.turn-player{
+  position:relative;display:none;
+  font-family:'Nunito',sans-serif;font-weight:900;
+  font-size:clamp(1.4rem,5vw,3rem);text-align:center;padding:.2rem 1.5rem 0;
+  color:#fff;
+  animation:turn-name-in .5s .22s cubic-bezier(.34,1.5,.64,1) both
+}
+.turn-player.show{display:block}
+.turn-player .tp-label{
+  display:block;font-size:.42em;letter-spacing:.3em;text-transform:uppercase;
+  color:rgba(255,255,255,.45);font-weight:800;margin-bottom:.2rem
+}
+.turn-hint{
+  position:relative;
+  font-size:.78rem;color:rgba(255,255,255,.4);font-weight:700;
+  animation:blink 1.6s ease-in-out infinite
+}
+
+/* ══════════════════ ÚJ KÖR BANNER ══════════════════ */
+#round-overlay{
+  display:none;position:fixed;inset:0;z-index:68;
+  flex-direction:column;align-items:center;justify-content:center;gap:1rem;
+  background:rgba(6,6,18,.92);backdrop-filter:blur(12px)
+}
+#round-overlay.show{display:flex}
+#round-overlay::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 50%,rgba(30,200,255,.18) 0%,transparent 65%);
+  animation:turn-pulse 2s ease-in-out infinite
+}
+.round-eyebrow{
+  position:relative;
+  font-size:clamp(.9rem,3vw,1.5rem);letter-spacing:.5em;text-transform:uppercase;
+  color:rgba(255,255,255,.65);font-weight:800;
+  animation:turn-eyebrow-in .4s ease both
+}
+.round-number{
+  position:relative;
+  font-family:'Bebas Neue',sans-serif;font-weight:900;
+  font-size:clamp(3.4rem,16vw,10rem);line-height:1;
+  background:linear-gradient(135deg,var(--gold),var(--gold2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 30px rgba(30,200,255,.5));
+  animation:turn-name-in .5s .1s cubic-bezier(.34,1.6,.64,1) both
+}
+
+/* ══════════════════ SAROK-KIJELZŐ (kör + óra) ══════════════════ */
+#game-info{
+  display:none;
+  position:fixed;top:.5rem;left:1.5rem;z-index:30;
+  align-items:center;gap:.55rem;
+  font-family:'Bebas Neue',sans-serif;font-size:.72rem;font-weight:700;
+  color:rgba(255,255,255,.5);
+  background:rgba(20,20,45,.4);backdrop-filter:blur(8px);
+  padding:.32rem .8rem;border-radius:14px;
+  border:1px solid rgba(255,255,255,.08);
+  pointer-events:none;white-space:nowrap
+}
+#game-info .gi-clock-icon{opacity:.6;font-size:.85em}
+#game-info .gi-clock{color:rgba(255,255,255,.6);min-width:3.2em}
+
+/* ══════════════════ FIREBASE GAME OVERLAY ══════════════════ */
+#game-overlay{
+  display:none;position:fixed;inset:0;z-index:65;
+  flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;
+  background:rgba(6,6,18,.93);backdrop-filter:blur(14px)
+}
+#game-overlay.show{display:flex}
+
+/* ── RABLÁS: élő, DÍSZES jelzés (visszaszámlálás/időzítő alatt) ── */
+#robbery-live{
+  display:none;position:fixed;top:2.2rem;left:50%;transform:translateX(-50%);z-index:80;
+  flex-direction:column;align-items:center;gap:.7rem;pointer-events:none
+}
+#robbery-live.show{display:flex}
+.rb-live-title{
+  font-family:'Bebas Neue',sans-serif;font-weight:900;
+  font-size:clamp(2rem,5.5vw,3.6rem);letter-spacing:.1em;color:#ff5c5c;
+  text-shadow:0 0 24px rgba(232,64,64,.75),0 0 60px rgba(232,64,64,.4);
+  animation:rbTitlePulse 1.1s ease-in-out infinite
+}
+@keyframes rbTitlePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+/* Vízszintesen, egy sorban (szükség esetén tördelve) - így akárhány
+   jelentkező csapat van egyszerre, a lista inkább szélesedik, mint
+   magasodik, és nem lóg bele a 3-2-1 visszaszámlálóba. */
+.rb-live-list{display:flex;flex-direction:row;flex-wrap:wrap;gap:.4rem;align-items:center;justify-content:center;max-width:92vw}
+.rb-live-item{
+  display:flex;align-items:center;gap:.5rem;flex:none;
+  background:rgba(6,6,18,.85);backdrop-filter:blur(8px);
+  border:1px solid rgba(232,64,64,.45);border-radius:999px;
+  padding:.4rem .95rem;font-weight:800;font-size:.9rem;
+  color:#fff;box-shadow:0 4px 16px rgba(232,64,64,.3);
+  animation:rbItemIn .3s cubic-bezier(.34,1.56,.64,1) both
+}
+.rb-live-item .rb-rank{
+  color:#ff5c5c;font-family:'Bebas Neue',sans-serif;font-size:1.2rem;min-width:1.2em;text-align:center
+}
+@keyframes rbItemIn{from{opacity:0;transform:translateY(-14px) scale(.9)}to{opacity:1;transform:translateY(0) scale(1)}}
+
+/* ── RABLÁS: nagy képernyő (lejárt idő + volt jelentkező) ── */
+#robbery-banner{
+  display:none;position:fixed;inset:0;z-index:500;
+  flex-direction:column;align-items:center;justify-content:center;gap:1rem;
+  background:radial-gradient(ellipse at 50% 40%,rgba(232,64,64,.25),rgba(6,6,18,.96) 70%);
+  backdrop-filter:blur(10px)
+}
+#robbery-banner.show{display:flex;animation:rbBannerIn .35s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes rbBannerIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
+.rb-eyebrow{
+  font-family:'Bebas Neue',sans-serif;font-weight:900;
+  font-size:clamp(3.5rem,14vw,9rem);letter-spacing:.06em;color:#e84040;
+  text-shadow:0 0 50px rgba(232,64,64,.7);
+  animation:rbPulse 1s ease-in-out infinite
+}
+@keyframes rbPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+.rb-team{
+  font-family:'Bebas Neue',sans-serif;font-weight:900;
+  font-size:clamp(2rem,7vw,4.5rem);color:#fff;text-align:center;padding:0 1.5rem
+}
+.rb-hint{
+  font-size:clamp(.9rem,2.4vw,1.3rem);letter-spacing:.3em;text-transform:uppercase;
+  color:rgba(255,255,255,.5);font-weight:800
+}
+
+/* ── RABLÁS: "sikeres rablás" ünneplő képernyő ── */
+#robbery-success{
+  display:none;position:fixed;inset:0;z-index:520;
+  flex-direction:column;align-items:center;justify-content:center;gap:1.1rem;
+  background:radial-gradient(ellipse at 50% 40%,rgba(46,204,113,.25),rgba(6,6,18,.97) 70%);
+  backdrop-filter:blur(10px)
+}
+#robbery-success.show{display:flex;animation:rbBannerIn .4s cubic-bezier(.34,1.56,.64,1) both}
+.rs-eyebrow{
+  font-family:'Bebas Neue',sans-serif;font-weight:900;
+  font-size:clamp(2.2rem,7vw,4.2rem);letter-spacing:.04em;color:#2ECC71;
+  text-shadow:0 0 40px rgba(46,204,113,.7)
+}
+.rs-word{
+  font-family:'Bebas Neue',sans-serif;font-weight:900;
+  font-size:clamp(2.5rem,9vw,5.5rem);color:#fff;text-align:center;padding:0 1.5rem
+}
+.rs-team{
+  font-size:clamp(1.1rem,3vw,1.7rem);letter-spacing:.2em;text-transform:uppercase;
+  color:rgba(255,255,255,.65);font-weight:800
+}
+.rs-points{
+  font-family:'Bebas Neue',sans-serif;font-weight:900;font-size:clamp(1.8rem,5vw,3rem);
+  color:#2ECC71;text-shadow:0 0 24px rgba(46,204,113,.6)
+}
+
+/* ── RABLÁS: "sikertelen rablás" képernyő ── */
+#robbery-failed{
+  display:none;position:fixed;inset:0;z-index:520;
+  flex-direction:column;align-items:center;justify-content:center;gap:1.1rem;
+  background:radial-gradient(ellipse at 50% 40%,rgba(232,64,64,.25),rgba(6,6,18,.97) 70%);
+  backdrop-filter:blur(10px)
+}
+#robbery-failed.show{display:flex;animation:rbBannerIn .4s cubic-bezier(.34,1.56,.64,1) both}
+.rf-eyebrow{
+  font-family:'Bebas Neue',sans-serif;font-weight:900;
+  font-size:clamp(2.2rem,7vw,4.2rem);letter-spacing:.04em;color:#e84040;
+  text-shadow:0 0 40px rgba(232,64,64,.7)
+}
+.rf-team{
+  font-size:clamp(1.3rem,3.6vw,2.2rem);color:#fff;font-weight:800;text-align:center;padding:0 1.5rem
+}
+.rf-points{
+  font-family:'Bebas Neue',sans-serif;font-weight:900;font-size:clamp(1.8rem,5vw,3rem);
+  color:#e84040;text-shadow:0 0 24px rgba(232,64,64,.6)
+}
+@media (prefers-reduced-motion: reduce){
+  .rb-live-item,.rb-live-title,#robbery-banner,#robbery-success,#robbery-failed,.rb-eyebrow{animation:none!important}
+}
+
+/* ── Running: countdown ── */
+.gv-eyebrow{
+  font-size:clamp(.75rem,2.2vw,1.1rem);letter-spacing:.45em;text-transform:uppercase;
+  color:rgba(255,255,255,.5);font-weight:800
+}
+.timer-ring{position:relative;width:min(58vmin,340px);height:min(58vmin,340px)}
+.timer-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.timer-ring .ring-bg{fill:none;stroke:rgba(255,255,255,.08);stroke-width:10}
+.timer-ring .ring-fg{
+  fill:none;stroke:var(--ring-color,#1ec8ff);stroke-width:10;stroke-linecap:round;
+  transition:stroke-dashoffset .95s linear,stroke .4s ease,filter .3s ease;
+  filter:drop-shadow(0 0 12px var(--ring-glow,rgba(30,200,255,.6)))
+}
+.timer-ring.heartbeat .ring-fg{animation:ring-heartbeat 1s ease-in-out infinite}
+@keyframes ring-heartbeat{
+  0%,100%{filter:drop-shadow(0 0 12px var(--ring-glow))}
+  50%{filter:drop-shadow(0 0 28px var(--ring-glow))}
+}
+@media (prefers-reduced-motion: reduce){
+  .timer-ring.heartbeat .ring-fg{animation:none}
+}
+.timer-num{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:'Bebas Neue',sans-serif;font-weight:900;
+  font-size:min(28vmin,168px);color:#fff;line-height:1;font-variant-numeric:tabular-nums
+}
+.timer-num.tick{animation:tick-pop .4s ease}
+@keyframes tick-pop{0%{transform:scale(1)}40%{transform:scale(1.12)}100%{transform:scale(1)}}
+.timer-num.urgent{color:#FF5252;animation:urgent-pulse .6s ease-in-out infinite}
+@keyframes urgent-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:.85}}
+
+/* ── Result: solved / timeout ── */
+#gv-result{display:none;flex-direction:column;align-items:center;gap:1rem;text-align:center}
+#gv-result.show{display:flex}
+.gv-result-icon{
+  font-size:clamp(3rem,9vw,6rem);line-height:1;
+  animation:result-bounce .7s cubic-bezier(.34,1.7,.64,1) both
+}
+@keyframes result-bounce{0%{transform:scale(0) rotate(-15deg);opacity:0}100%{transform:scale(1) rotate(0);opacity:1}}
+.gv-word{
+  font-family:'Bebas Neue',sans-serif;font-weight:900;
+  font-size:clamp(2.8rem,11vw,7.3rem);padding:0 1.5rem;line-height:1.05;
+  animation:result-word-in .5s .12s cubic-bezier(.34,1.5,.64,1) both
+}
+@keyframes result-word-in{0%{opacity:0;transform:scale(.5)}100%{opacity:1;transform:scale(1)}}
+.gv-points{
+  font-family:'Bebas Neue',sans-serif;font-weight:700;
+  font-size:clamp(1.1rem,3vw,2rem);opacity:.85;
+  animation:result-word-in .5s .22s cubic-bezier(.34,1.5,.64,1) both
+}
+.gv-solved .gv-word{color:#2ECC71;text-shadow:0 0 40px rgba(46,204,113,.55)}
+.gv-solved .gv-points{color:#2ECC71}
+.gv-timeout .gv-word{color:#E74C3C;text-shadow:0 0 40px rgba(231,76,60,.55)}
+.gv-timeout .gv-points{color:#E74C3C}
+
+/* Connection status dot */
+#fb-status{
+  position:fixed;top:.6rem;left:.7rem;z-index:45;
+  width:9px;height:9px;border-radius:50%;
+  background:#888;opacity:.5;transition:background .3s;pointer-events:none
+}
+#fb-status.connected{background:#2ECC71}
+#fb-status.error{background:#E74C3C}
+
+#gesture-hint{
+  position:fixed;bottom:3.8rem;left:50%;transform:translateX(-50%);
+  background:rgba(20,20,50,.85);backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.15);
+  padding:.55rem 1.3rem;border-radius:22px;
+  font-size:.72rem;color:rgba(255,255,255,.75);font-weight:700;
+  white-space:nowrap;z-index:30;pointer-events:none;
+  animation:hint-anim 4.5s ease forwards
+}
+@keyframes hint-anim{
+  0%{opacity:0;transform:translateX(-50%) translateY(8px)}
+  10%{opacity:1;transform:translateX(-50%) translateY(0)}
+  75%{opacity:1}100%{opacity:0}
+}
+
+/* ══════════════════ ÉRINTÉS-ELKAPÓ (ponttáblán koppintás → rajz) ══════════════════ */
+/* A ranglista fölött, de az operátor-vezérlők (▶ z40, topbar z50, overlay-k z60+) ALATT,
+   így a vezérlők és a kétujjas/hosszú-nyomásos előhívás továbbra is működnek. */
+#draw-trigger{position:absolute;inset:0;z-index:35;background:transparent;touch-action:none}
+
+/* ══════════════════ RAJZRÉTEG ══════════════════ */
+#draw-layer{
+  position:fixed;inset:0;z-index:500;background:#fff;display:block;
+  touch-action:none;-webkit-user-select:none;user-select:none;overscroll-behavior:none;
+  opacity:0;transform:scale(.96);pointer-events:none;
+  transition:opacity .38s var(--ease-out),transform .42s var(--ease-out)
+}
+#draw-layer.open{opacity:1;transform:scale(1);pointer-events:auto}
+@media (prefers-reduced-motion: reduce){
+  #draw-layer{transition:opacity .15s linear;transform:none}
+}
+#draw-layer #dl-canvas{position:fixed;inset:0;display:block;touch-action:none;cursor:crosshair}
+
+#draw-layer .dl-hint{
+  position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;
+  color:#c7c9cf;font-size:clamp(18px,4vw,28px);font-weight:500;letter-spacing:.3px;
+  font-family:'Nunito',sans-serif;transition:opacity .4s ease
+}
+#draw-layer .dl-hint.gone{opacity:0}
+
+/* Visszaszámláló-csip a rajzrétegen (a rajzoló is lássa az időt) */
+#draw-layer .dl-timer{
+  position:fixed;top:max(14px,env(safe-area-inset-top));left:max(14px,env(safe-area-inset-left));
+  z-index:520;min-width:62px;padding:8px 16px;border-radius:16px;
+  background:#14151a;color:#fff;font-family:'Bebas Neue',sans-serif;font-weight:900;
+  font-size:28px;text-align:center;font-variant-numeric:tabular-nums;
+  box-shadow:0 6px 20px rgba(20,21,26,.28)
+}
+#draw-layer .dl-timer.urgent{background:#e84040;animation:dl-pulse .5s ease-in-out infinite}
+@keyframes dl-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+
+/* Vissza a ponttáblához */
+#draw-layer .dl-back{
+  position:fixed;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right));
+  z-index:520;width:46px;height:46px;border:none;border-radius:14px;
+  background:#1b1c22;color:#f4f5f7;font-size:20px;display:grid;place-items:center;
+  box-shadow:0 6px 20px rgba(20,21,26,.18);opacity:.6;cursor:pointer;transition:opacity .2s,transform .15s
+}
+#draw-layer .dl-back:active{transform:scale(.94)}
+
+/* Visszavonás / Újra - MINDIG látszik, jobb alsó sarok, egymás mellett */
+#dl-history-group{
+  position:fixed;right:max(14px,env(safe-area-inset-right));bottom:max(14px,env(safe-area-inset-bottom));
+  z-index:522;display:flex;gap:8px
+}
+.dl-history-btn{
+  width:auto;min-width:46px;height:46px;border:none;border-radius:14px;padding:0 10px;
+  background:#1b1c22;color:#f4f5f7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  box-shadow:0 6px 20px rgba(20,21,26,.28);opacity:.85;cursor:pointer;transition:opacity .2s,transform .15s
+}
+.dl-history-btn .hb-icon{font-size:17px;line-height:1}
+.dl-history-btn .hb-label{font-family:'Nunito',sans-serif;font-size:9px;font-weight:700;letter-spacing:.02em;color:#9a9ca6}
+.dl-history-btn:active{transform:scale(.94)}
+
+/* Radír/toll gyorsváltó + eszköztár közös alsó-bal sor, hogy sose fedjék
+   egymást (korábban a toll/radír gomb és az eszköztár külön, átfedő
+   pozícióban voltak). */
+#dl-bottom-left-row{
+  position:fixed;left:max(14px,env(safe-area-inset-left));bottom:max(14px,env(safe-area-inset-bottom));
+  z-index:520;display:flex;align-items:center;gap:8px;max-width:calc(100vw - 28px)
+}
+#dl-quick-tool{
+  flex:none;border:none;border-radius:16px;height:52px;padding:0 14px 0 12px;
+  background:#4263eb;color:#fff;display:flex;align-items:center;gap:7px;
+  box-shadow:0 8px 24px rgba(66,99,235,.4);cursor:pointer;transition:transform .15s,background .15s
+}
+#dl-quick-tool:active{transform:scale(.94)}
+#dl-quick-tool svg{width:24px;height:24px;grid-area:1/1;flex:none}
+#dl-quick-tool .qt-icon-pen{display:none}
+#dl-quick-tool .qt-label{font-family:'Nunito',sans-serif;font-size:12px;font-weight:800}
+#dl-quick-tool .qt-label-pen{display:none}
+#dl-quick-tool.erasing .qt-label-eraser{display:none}
+#dl-quick-tool.erasing .qt-label-pen{display:inline}
+#dl-quick-tool.erasing{background:#e8a23c}
+#dl-quick-tool.erasing .qt-icon-eraser{display:none}
+#dl-quick-tool.erasing .qt-icon-pen{display:block}
+/* Rajzolás közben (eszköztár elrejtve) is látszódjon, ez fontosabb, mint a ✕ */
+#draw-layer.tools-hidden #dl-quick-tool{display:grid}
+
+/* Radír-méret jelző kör - a radírozás alatt követi az ujjat/tollat */
+#dl-eraser-cursor{
+  display:none;position:fixed;z-index:521;border-radius:50%;
+  border:2px solid rgba(232,64,64,.85);background:rgba(232,64,64,.12);
+  pointer-events:none;transform:translate(-50%,-50%)
+}
+#dl-eraser-cursor.show{display:block}
+
+/* Színválasztó - folyamatosan látszik, amíg tollat használunk (rajzolás
+   közben, eszköztár nélkül is), csak radír módban tűnik el. Alul középen,
+   a bal alsó (toll/radír + eszköztár) és jobb alsó (visszavonás/újra)
+   gombcsoportok között, hogy sose ütközzenek. */
+#dl-colors{
+  position:fixed;left:50%;bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);
+  z-index:520;display:flex;flex-direction:row;align-items:center;gap:8px;
+  padding:6px 10px;border-radius:20px;background:#1b1c22;box-shadow:0 10px 26px rgba(20,21,26,.26)
+}
+.dl-color{
+  width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,.15);
+  padding:0;cursor:pointer;transition:transform .15s,border-color .15s;flex:none
+}
+.dl-color:active{transform:scale(.9)}
+.dl-color.active{border-color:#fff;transform:scale(1.15)}
+/* Csak radír módban tűnik el - rajzolás közben (eszköztár elrejtve) is látszik */
+#dl-colors.hidden-erasing{display:none}
+
+/* Diszkrét rablás-jelzés a rajzfelület tetején - kisebb/visszafogottabb,
+   mint a ponttáblán lévő nagy verzió, hiszen itt a rajzolás a fókusz. */
+#dl-robbery-badge{
+  display:none;position:fixed;top:max(10px,env(safe-area-inset-top));left:50%;
+  transform:translateX(-50%);z-index:521;
+  background:rgba(232,64,64,.92);color:#fff;font-family:'Nunito',sans-serif;
+  font-weight:800;font-size:12px;letter-spacing:.04em;padding:.4rem .9rem;
+  border-radius:999px;box-shadow:0 4px 14px rgba(232,64,64,.35);
+  animation:dlRobberyPulse 1.1s ease-in-out infinite
+}
+#dl-robbery-badge.show{display:block}
+@keyframes dlRobberyPulse{0%,100%{opacity:1}50%{opacity:.7}}
+
+#draw-layer .dl-toolbar{
+  display:flex;align-items:center;gap:3px;padding:5px;border-radius:16px;
+  background:#1b1c22;box-shadow:0 10px 32px rgba(20,21,26,.28);
+  flex:1 1 auto;min-width:0;overflow-x:auto
+}
+#draw-layer .dl-tool{
+  appearance:none;border:none;background:transparent;color:#9a9ca6;height:40px;min-width:40px;
+  padding:0 9px;border-radius:12px;display:inline-flex;align-items:center;gap:6px;
+  font-family:'Nunito',sans-serif;font-size:13px;font-weight:700;cursor:pointer;
+  transition:background .15s,color .15s,transform .12s
+}
+#draw-layer .dl-tool svg{width:18px;height:18px;flex:none}
+#draw-layer .dl-tool:active{transform:scale(.95)}
+#draw-layer .dl-tool.active{background:#4263eb;color:#fff}
+#draw-layer .dl-tool.ghost:active{background:#2a2b33}
+#draw-layer .dl-divider{width:1px;height:26px;background:rgba(255,255,255,.10);margin:0 3px}
+#draw-layer .dl-size{display:flex;align-items:center;gap:8px;padding:0 9px 0 8px;height:40px}
+#draw-layer .dl-preview{width:24px;height:24px;flex:none;display:grid;place-items:center}
+#draw-layer .dl-dot{background:#f4f5f7;border-radius:50%;transition:width .12s,height .12s}
+#draw-layer .dl-toolbar.erasing .dl-dot{background:transparent;box-shadow:inset 0 0 0 2px #9a9ca6}
+#draw-layer input[type=range]{-webkit-appearance:none;appearance:none;width:104px;height:28px;background:transparent;cursor:pointer}
+#draw-layer input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:3px;background:#2a2b33}
+#draw-layer input[type=range]::-moz-range-track{height:4px;border-radius:3px;background:#2a2b33}
+#draw-layer input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;margin-top:-8px;border-radius:50%;background:#f4f5f7;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+#draw-layer input[type=range]::-moz-range-thumb{width:20px;height:20px;border:none;border-radius:50%;background:#f4f5f7;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+#draw-layer .dl-val{font-variant-numeric:tabular-nums;font-size:12px;color:#9a9ca6;min-width:18px;text-align:right}
+@media (max-width:560px){
+  #draw-layer .dl-tool .label{display:none}
+  #draw-layer .dl-tool{padding:0}
+  #draw-layer input[type=range]{width:88px}
+}
+
+/* Rajzolás közben az eszköztár + ✕ eltűnik, marad egy pici "Eszköztár" gomb */
+#draw-layer.tools-hidden .dl-toolbar,
+#draw-layer.tools-hidden .dl-back{display:none}
+#dl-show-tools{
+  position:fixed;left:calc(max(12px,env(safe-area-inset-left)) + 62px);bottom:max(12px,env(safe-area-inset-bottom));
+  z-index:520;display:none;align-items:center;gap:5px;padding:7px 11px;border-radius:13px;
+  border:none;background:#1b1c22;color:#cfd2da;opacity:.55;
+  font-family:'Nunito',sans-serif;font-size:11px;font-weight:700;letter-spacing:.04em;cursor:pointer;
+  box-shadow:0 6px 18px rgba(20,21,26,.22);transition:opacity .15s,transform .12s
+}
+#dl-show-tools svg{width:15px;height:15px}
+#dl-show-tools:active{transform:scale(.95)}
+#draw-layer.tools-hidden #dl-show-tools{display:inline-flex}
+
+/* "Felkészültél?" / 3-2-1 a rajztáblán (rajzolás-zár alatt) */
+#dl-ready{
+  position:fixed;inset:0;z-index:515;display:none;place-items:center;text-align:center;
+  background:rgba(255,255,255,.72);backdrop-filter:blur(2px);
+  font-family:'Bebas Neue',sans-serif;color:#14151a;pointer-events:none
+}
+#dl-ready.show{display:grid}
+#dl-ready .rdy-text{
+  font-size:clamp(32px,8.5vw,68px);font-weight:900;letter-spacing:.02em;
+  color:#2a2b33;text-shadow:0 4px 18px rgba(66,99,235,.25);
+  animation:rdyPulse 1.4s ease-in-out infinite
+}
+@keyframes rdyPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+#dl-ready .rdy-num{font-size:clamp(80px,22vw,200px);font-weight:900;line-height:1;
+  color:#4263eb;animation:cd-pop .4s cubic-bezier(.34,1.6,.64,1)}
+
+/* "Lejárt az idő" - díszesebb, mint az egyszerű "Felkészültél?" szöveg */
+#dl-ready.timeout{background:rgba(232,64,64,.92);backdrop-filter:blur(6px)}
+#dl-ready.timeout .rdy-text{
+  color:#fff;font-size:clamp(2.4rem,9vw,5.5rem);text-shadow:0 0 40px rgba(0,0,0,.35);
+  animation:dlTimeoutPop .45s cubic-bezier(.34,1.6,.64,1)
+}
+@keyframes dlTimeoutPop{0%{transform:scale(.7);opacity:0}60%{transform:scale(1.08);opacity:1}100%{transform:scale(1)}}
+
+/* 3-2-1 a ponttáblán */
+#countdown-overlay{
+  display:none;position:fixed;inset:0;z-index:72;
+  flex-direction:column;align-items:center;justify-content:center;gap:.6rem;
+  background:rgba(8,8,24,.78);backdrop-filter:blur(8px)
+}
+#countdown-overlay.show{display:flex}
+#countdown-overlay .cd-eyebrow{font-size:.8rem;letter-spacing:.5em;text-transform:uppercase;color:rgba(255,255,255,.45)}
+#countdown-overlay .cd-num{
+  font-family:'Bebas Neue',sans-serif;font-weight:900;font-size:clamp(6.5rem,30vw,17rem);line-height:1;font-variant-numeric:tabular-nums;
+  color:var(--gold);filter:drop-shadow(0 0 40px rgba(30,200,255,.6));animation:cd-pop .4s cubic-bezier(.34,1.6,.64,1)
+}
+@keyframes cd-pop{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.15);opacity:1}100%{transform:scale(1)}}
+
+/* Halvány háttérkép a tábla mögött */
+#bg-image{
+  position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background-position:center;background-repeat:no-repeat;background-size:cover;
+  opacity:0;transition:opacity .6s ease
+}
+#bg-image.on{opacity:.18}
+
+/* Hangkönyvtár panel */
+#al-panel{
+  display:none;position:fixed;inset:0;z-index:950;background:rgba(8,10,16,.97);
+  backdrop-filter:blur(8px);color:#f4f5f7;font-family:'Nunito',sans-serif;
+  padding:20px;overflow-y:auto
+}
+#al-panel.open{display:block}
+.al-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.al-head h2{margin:0;font-size:18px;letter-spacing:.06em}
+.al-close{background:#1b1c22;border:none;color:#f4f5f7;padding:9px 16px;border-radius:10px;cursor:pointer;font:inherit;font-weight:700}
+.al-hint{font-size:13px;color:#9a9ca6;line-height:1.5;margin:0 0 16px}
+.al-row{display:flex;gap:8px;margin-bottom:12px}
+.al-row select{flex:1 1 auto;background:#1b1c22;color:#f4f5f7;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px;font:inherit;font-size:13px}
+.al-upload{display:inline-block;background:#4263eb;color:#fff;padding:11px 18px;border-radius:10px;cursor:pointer;font-weight:700;font-size:14px;margin-bottom:16px}
+#al-track-list{display:flex;flex-direction:column;gap:6px}
+.al-track{display:flex;align-items:center;gap:8px;background:#1b1c22;border-radius:10px;padding:9px 12px;font-size:13px}
+.al-track .name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.al-track .del{background:none;border:none;color:#e8433c;cursor:pointer;font-size:16px;padding:4px}
+.al-empty{color:#6b6d76;font-size:13px;padding:14px 4px}
+.al-mode-btn{flex:1 1 0;background:#1b1c22;color:#9a9ca6;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.al-mode-btn.active{background:#4263eb;color:#fff;border-color:#4263eb}
+#intro-panel{display:none;position:fixed;inset:0;z-index:951;background:rgba(8,10,16,.97);backdrop-filter:blur(8px);color:#f4f5f7;font-family:'Nunito',sans-serif;padding:20px;overflow-y:auto}
+#intro-panel.open{display:block}
+
+/* Intro overlay ("Új játék" indításakor) */
+#intro-overlay{position:fixed;inset:0;z-index:960;background:#08090d;display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;pointer-events:none}
+#intro-overlay.show{display:flex;animation:introFadeOut 2.5s ease forwards}
+.intro-logo{font-size:64px;animation:introPop .6s cubic-bezier(.34,1.56,.64,1)}
+.intro-title{font-family:'Bebas Neue',sans-serif;font-size:44px;letter-spacing:.2em;color:#4ee6ff;text-shadow:0 0 30px rgba(78,230,255,.5);opacity:0;animation:introTitleIn .5s ease .3s forwards}
+@keyframes introPop{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes introTitleIn{to{opacity:1}}
+@keyframes introFadeOut{0%,72%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion: reduce){ #intro-overlay.show{animation:none} }
+</style>
+<!-- Firebase SDK (valós idejű kapcsolat a játék-apphoz) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<!-- QR kód generátor a Rabló App linkjéhez -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+</head>
+<body>
+
+<!-- Ambient glow háttérréteg (dísz, mélységérzet) -->
+<div id="ambient"><span></span><span></span><span></span></div>
+
+<!-- Halvány háttérkép (a felhasználó által beállítva, localStorage-ben) -->
+<div id="bg-image"></div>
+
+<!-- ══════ SETUP ══════ -->
+<div id="setup">
+  <div>
+    <div class="logo">Reactivity</div>
+    <div class="logo-sub">Eredménytábla</div>
+  </div>
+  <div class="scard">
+    <div class="slabel">Csapatok száma</div>
+    <div class="cnt-row" id="cnt-row"></div>
+  </div>
+  <div class="scard">
+    <div class="slabel">Csapatok és játékosok</div>
+    <div class="name-grid" id="name-grid"></div>
+  </div>
+  <div class="scard">
+    <div class="slabel">Háttérkép (halvány)</div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+      <button class="tbb" type="button" onclick="document.getElementById('bg-file').click()">🖼 Kép kiválasztása</button>
+      <button class="tbb red" type="button" onclick="clearBgImage()">Törlés</button>
+      <span id="bg-name" style="font-size:.8rem;color:rgba(255,255,255,.4)"></span>
+    </div>
+    <input type="file" id="bg-file" accept="image/*" style="display:none">
+  </div>
+  <div class="scard">
+    <div class="slabel">Rabló App</div>
+    <button class="tbb" type="button" onclick="showRobloQR()">📱 QR kód a Rabló App-hoz</button>
+  </div>
+  <button class="go-btn" onclick="startGame()">🎮 &nbsp;JÁTÉK KEZDÉSE</button>
+</div>
+
+<!-- Rabló App QR kód modal -->
+<div id="qr-modal">
+  <div class="qr-box">
+    <button class="qr-close" id="qr-close-btn">Bezár</button>
+    <div class="qr-title">Rabló App</div>
+    <div id="qr-canvas-wrap"></div>
+    <input type="text" id="qr-url-input" placeholder="Rabló App linkje…">
+    <p class="qr-hint">A csapatok ezzel a QR-kóddal (vagy a linkkel) érik el a Rabló App-ot a saját telefonjukon.</p>
+  </div>
+</div>
+
+<!-- ══════ BOARD ══════ -->
+<div id="board">
+  <div class="topbar">
+    <div class="tb-logo">🏆 Reactivity</div>
+    <div class="tb-right">
+      <button class="tbb" id="fs-btn" onclick="toggleFullscreen()">⛶ Teljes</button>
+      <button class="tbb" onclick="goSetup()">↩ Beállítás</button>
+      <button class="tbb red" onclick="doReset()">Nullázás</button>
+      <button class="tbb gold" onclick="showWinner()">🏆 Győztes!</button>
+    </div>
+  </div>
+  <div id="rank-list"></div>
+
+  <!-- Érintés-elkapó: ponttáblán koppintás → rajzfelület (a vezérlők alatt marad) -->
+  <div id="draw-trigger"></div>
+
+  <!-- Discrete "next team" button — bottom-right corner -->
+  <button id="next-team-btn" onclick="nextTeam()" title="Következő csapat">▶</button>
+
+  <div class="inc-bar">
+    <span class="inc-label">Lépés</span>
+    <button class="inc-pill on" onclick="setIncrement(1,this)">+1</button>
+    <button class="inc-pill"    onclick="setIncrement(2,this)">+2</button>
+    <button class="inc-pill"    onclick="setIncrement(5,this)">+5</button>
+    <button class="inc-pill"    onclick="setIncrement(10,this)">+10</button>
+    <button class="inc-pill"    onclick="setIncrement(20,this)">+20</button>
+  </div>
+</div>
+
+<!-- ══════ WINNER ══════ -->
+<div id="winner-overlay">
+  <div class="w-eyebrow">🎉 &nbsp; Győztes &nbsp; 🎉</div>
+  <div class="w-trophy">🏆</div>
+  <div class="w-name" id="w-name-el"></div>
+  <div class="w-score-label" id="w-score-el"></div>
+  <button class="w-close" onclick="closeWinner()">Folytatás →</button>
+</div>
+<canvas id="confetti-canvas"></canvas>
+
+<!-- ══════ TURN / NEXT-TEAM OVERLAY ══════ -->
+<div id="turn-overlay" onclick="closeTurn()">
+  <div class="turn-eyebrow">Soron következik</div>
+  <div class="turn-name" id="turn-name-el"></div>
+  <div class="turn-player" id="turn-player-el"></div>
+</div>
+
+<!-- ══════ ÚJ KÖR BANNER ══════ -->
+<div id="round-overlay">
+  <div class="round-eyebrow">Új kör</div>
+  <div class="round-number" id="round-number-el"></div>
+</div>
+
+<!-- ══════ SAROK-KIJELZŐ: összesített óra ══════ -->
+<div id="game-info">
+  <span class="gi-clock-icon">⏱</span>
+  <span class="gi-clock" id="gi-clock">0:00</span>
+</div>
+
+<!-- ══════ FIREBASE GAME OVERLAY (visszaszámláló + eredmény) ══════ -->
+<div id="game-overlay">
+  <!-- Running: countdown -->
+  <div id="gv-timer" style="display:flex;flex-direction:column;align-items:center;gap:1.5rem">
+    <div class="gv-eyebrow">Visszaszámlálás</div>
+    <div class="timer-ring">
+      <svg viewBox="0 0 100 100">
+        <circle class="ring-bg" cx="50" cy="50" r="45"></circle>
+        <circle class="ring-fg" id="ring-fg" cx="50" cy="50" r="45"
+                stroke-dasharray="283" stroke-dashoffset="0"></circle>
+      </svg>
+      <div class="timer-num" id="timer-num">0</div>
+    </div>
+  </div>
+  <!-- Result: solved / timeout -->
+  <div id="gv-result">
+    <div class="gv-result-icon" id="gv-icon">✅</div>
+    <div class="gv-word" id="gv-word"></div>
+    <div class="gv-points" id="gv-points"></div>
+  </div>
+</div>
+
+<!-- Élő rablás-jelentkezési lista (időzítő futása alatt, jobb felül) -->
+<div id="robbery-live">
+  <div class="rb-live-title">🚨 RABLÁS! 🚨</div>
+  <div class="rb-live-list" id="rb-live-list"></div>
+</div>
+
+<!-- Nagy "RABLÁS" képernyő (lejárt idő + volt jelentkező) -->
+<div id="robbery-banner">
+  <div class="rb-eyebrow">RABLÁS</div>
+  <div class="rb-team" id="rb-team-name"></div>
+  <div class="rb-hint">Kitalálja a választ?</div>
+</div>
+
+<!-- "Sikeres rablás" képernyő -->
+<div id="robbery-success">
+  <div class="rs-eyebrow">✅ Sikeres rablás!</div>
+  <div class="rs-word" id="rs-word"></div>
+  <div class="rs-team" id="rs-team"></div>
+  <div class="rs-points">+1 pont</div>
+</div>
+
+<!-- "Sikertelen rablás" képernyő -->
+<div id="robbery-failed">
+  <div class="rf-eyebrow">❌ Rablás sikertelen!</div>
+  <div class="rf-team" id="rf-team"></div>
+  <div class="rf-points">-1 pont</div>
+</div>
+
+<!-- Firebase kapcsolat-jelző pont -->
+<div id="fb-status"></div>
+<div style="position:fixed;bottom:6px;right:9px;z-index:45;font-size:10px;color:rgba(255,255,255,.28);pointer-events:none;font-family:'Nunito',sans-serif">v2.10</div>
+
+<!-- Hangkönyvtár - diszkrét gomb, csak ide kell feltölteni a szituációs
+     zenéket, mert a lejátszás is ezen az eszközön történik. -->
+<button id="al-open-btn" title="Hangkönyvtár" style="position:fixed;bottom:6px;left:9px;z-index:45;background:none;border:none;font-size:14px;opacity:.28;cursor:pointer;padding:6px">🎵</button>
+<button id="intro-open-btn" title="Intro hang" style="position:fixed;bottom:6px;left:32px;z-index:45;background:none;border:none;font-size:14px;opacity:.28;cursor:pointer;padding:6px">🎬</button>
+
+<div id="intro-panel">
+  <div class="al-head">
+    <h2>Intro hang</h2>
+    <button class="al-close" id="intro-close-btn">Bezár</button>
+  </div>
+  <p class="al-hint">Ez a hang szól, amikor a GM App-ban "Új játék"-ot indítasz - minden app saját bevezető animációval + ezzel a hanggal indul.</p>
+  <label class="al-upload" for="intro-file-input">⬆ Hang feltöltése</label>
+  <input type="file" id="intro-file-input" accept="audio/*" style="display:none">
+  <div id="intro-name" class="al-empty">Nincs intro-hang beállítva</div>
+</div>
+
+<!-- Intro overlay - "Új játék" indításakor fut le -->
+<div id="intro-overlay">
+  <div class="intro-logo">🏆</div>
+  <div class="intro-title">REACTIVITY</div>
+</div>
+
+<div id="al-panel">
+  <div class="al-head">
+    <h2>Hangkönyvtár</h2>
+    <button class="al-close" id="al-close-btn">Bezár</button>
+  </div>
+  <p class="al-hint">Kategóriánkénti / helyzetenkénti szituációs zenék. Több fájl is feltölthető egy helyzethez - a lejátszás véletlenszerű, ismétlésmentes körforgásban.</p>
+  <div class="al-row" id="al-mode-row" style="margin-bottom:14px">
+    <button class="al-mode-btn active" id="al-mode-after" data-mode="after">Alap hang UTÁN induljon</button>
+    <button class="al-mode-btn" id="al-mode-instead" data-mode="instead">Alap hang HELYETT induljon</button>
+  </div>
+  <p class="al-hint" style="margin-top:-8px">Csak a "Sikeres megoldás" / "Sikertelen megoldás" helyzetekre vonatkozik, ahol van beépített hang is.</p>
+  <div class="al-row">
+    <select id="al-cat-select"></select>
+    <select id="al-slot-select">
+      <option value="idle">🌙 Üresjárat</option>
+      <option value="solved">✓ Sikeres megoldás</option>
+      <option value="timeout">✗ Sikertelen megoldás</option>
+      <option value="feladatok">🎯 Feladatok (mutogatás / rajzolás / körülírás / szájról olvasás)</option>
+      <option value="winner">🏆 Győzteshirdetés</option>
+    </select>
+  </div>
+  <label class="al-upload" for="al-file-input">⬆ MP3 feltöltése</label>
+  <input type="file" id="al-file-input" accept="audio/*" multiple style="display:none">
+  <div id="al-track-list"></div>
+</div>
+
+<!-- ══════ 3-2-1 VISSZASZÁMLÁLÓ (ponttáblán) ══════ -->
+<div id="countdown-overlay">
+  <div class="cd-eyebrow">Felkészülni</div>
+  <div class="cd-num" id="cd-num">3</div>
+</div>
+
+<!-- ══════ RAJZRÉTEG (érintésre / rajzos feladványra jelenik meg) ══════ -->
+<div id="draw-layer">
+  <canvas id="dl-canvas"></canvas>
+  <div class="dl-hint" id="dl-hint">Rajzolj…</div>
+  <div class="dl-timer" id="dl-timer" style="display:none"><span id="dl-timer-num">0</span></div>
+
+  <!-- Diszkrét rablás-jelzés a rajzfelület tetején -->
+  <div id="dl-robbery-badge"><span id="dl-robbery-badge-text"></span></div>
+
+  <!-- "Felkészültél?" / 3-2-1 / "Lejárt az idő" a rajztáblán -->
+  <div id="dl-ready"><div><div class="rdy-text" id="dl-ready-text">Felkészültél?</div></div></div>
+
+  <button class="dl-back" id="dl-back" title="Vissza a ponttáblához">✕</button>
+
+  <!-- Visszavonás / Újra - MINDIG látszik a jobb alsó sarokban, egymás mellett -->
+  <div id="dl-history-group">
+    <button class="dl-history-btn" id="dl-undo" title="Visszavonás"><span class="hb-icon">↩</span><span class="hb-label">Vissza</span></button>
+    <button class="dl-history-btn" id="dl-redo" title="Újra"><span class="hb-icon">↪</span><span class="hb-label">Újra</span></button>
+  </div>
+
+  <!-- Radír-méret jelző, ami a radírozás alatt a ujj/toll pozíciójánál mutatja a kört -->
+  <div id="dl-eraser-cursor"></div>
+
+  <!-- Pici gomb, ami visszahozza az elrejtett eszköztárat -->
+  <button id="dl-show-tools" title="Eszköztár">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
+    Eszköztár
+  </button>
+
+  <!-- Színválasztó - folyamatosan látszik toll módban (rajzolás közben is,
+       nem csak amikor az eszköztár is látszik), radír módban elrejtve -->
+  <div class="dl-colors" id="dl-colors">
+    <button class="dl-color" data-color="#e8433c" style="background:#e8433c" aria-label="Piros"></button>
+    <button class="dl-color" data-color="#f39c12" style="background:#f39c12" aria-label="Narancs"></button>
+    <button class="dl-color" data-color="#f4d03f" style="background:#f4d03f" aria-label="Sárga"></button>
+    <button class="dl-color" data-color="#27ae60" style="background:#27ae60" aria-label="Zöld"></button>
+    <button class="dl-color" data-color="#2f80ed" style="background:#2f80ed" aria-label="Kék"></button>
+    <button class="dl-color" data-color="#9b59b6" style="background:#9b59b6" aria-label="Lila"></button>
+    <button class="dl-color active" data-color="#14151a" style="background:#14151a" aria-label="Fekete"></button>
+  </div>
+
+  <!-- Radír/toll gyorsváltó + eszköztár egy közös alsó-bal sorban, hogy
+       sose fedjék egymást (korábban külön, egymást átfedő pozícióban voltak) -->
+  <div id="dl-bottom-left-row">
+    <button id="dl-quick-tool" title="Radír / toll váltás">
+      <svg class="qt-icon-eraser" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 20H7L3 16a2 2 0 0 1 0-2.8l9.6-9.6a2 2 0 0 1 2.8 0l4.2 4.2a2 2 0 0 1 0 2.8L11 19"/><path d="M6.5 12.5l5 5"/>
+      </svg>
+      <svg class="qt-icon-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/>
+      </svg>
+      <span class="qt-label qt-label-eraser">Radír</span>
+      <span class="qt-label qt-label-pen">Toll</span>
+    </button>
+    <div class="dl-toolbar" id="dl-toolbar">
+    <button class="dl-tool active" id="dl-pen" aria-label="Toll">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/>
+      </svg><span class="label">Toll</span>
+    </button>
+    <div class="dl-divider"></div>
+    <div class="dl-size">
+      <span class="dl-preview"><span class="dl-dot" id="dl-dot"></span></span>
+      <input type="range" id="dl-size-range" min="1" max="60" value="1" aria-label="Vastagság">
+      <span class="dl-val" id="dl-size-val">1</span>
+    </div>
+    <div class="dl-divider"></div>
+    <button class="dl-tool ghost" id="dl-clear" aria-label="Lap törlése">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+      </svg><span class="label">Törlés</span>
+    </button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* ── DATA ────────────────────────────────────────── */
+const TEAM_COLORS = [
+  { main: '#FF4757', glow: 'rgba(255,71,87,.38)'   },
+  { main: '#2F80ED', glow: 'rgba(47,128,237,.38)'  },
+  { main: '#27AE60', glow: 'rgba(39,174,96,.38)'   },
+  { main: '#F39C12', glow: 'rgba(243,156,18,.38)'  },
+  { main: '#9B59B6', glow: 'rgba(155,89,182,.38)'  },
+  { main: '#E91E63', glow: 'rgba(233,30,99,.38)'   },
+  { main: '#00BCD4', glow: 'rgba(0,188,212,.38)'   },
+  { main: '#FF5722', glow: 'rgba(255,87,34,.38)'   },
+  { main: '#8BC34A', glow: 'rgba(139,195,74,.38)'  },
+  { main: '#FF9800', glow: 'rgba(255,152,0,.38)'   },
+];
+const MEDALS = ['🥇','🥈','🥉'];
+
+let teams      = [];  // [{id, name, score, color}]
+let increment  = 1;
+let numTeams   = 4;
+let turnIndex  = -1;  // tracks which team is "next" — advances on each press
+let globalTurn = -1;        // globális lépésszámláló (csapat+játékos rotációhoz)
+let roundNumber = 0;        // hanyadik körnél tartunk
+let roundBannerTimer = null;// az "Új kör" banner időzítője
+let gameStartTime = null;   // a játék kezdetének időpontja (összesített óra)
+let clockInterval = null;   // az óra frissítő intervalluma
+
+/* ── SETUP ───────────────────────────────────────── */
+(function buildCountButtons() {
+  const row = document.getElementById('cnt-row');
+  for (let i = 2; i <= 10; i++) {
+    const b = document.createElement('button');
+    b.className = 'cb' + (i === 4 ? ' on' : '');
+    b.textContent = i;
+    b.onclick = () => {
+      numTeams = i;
+      row.querySelectorAll('.cb').forEach((x, j) => x.classList.toggle('on', j + 2 === i));
+      buildNameInputs();
+    };
+    row.appendChild(b);
+  }
+})();
+
+function buildNameInputs() {
+  const g = document.getElementById('name-grid');
+  // megőrizzük a meglévő értékeket
+  const prevNames   = [...g.querySelectorAll('.name-inp')].map(x => x.value);
+  const prevPlayers = [...g.querySelectorAll('.players-inp')].map(x => x.value);
+  g.innerHTML = '';
+  for (let i = 0; i < numTeams; i++) {
+    const block = document.createElement('div');
+    block.className = 'team-block';
+    block.style.borderLeftColor = TEAM_COLORS[i].main;
+
+    const nameLabel = document.createElement('label');
+    nameLabel.className = 'field-label';
+    nameLabel.htmlFor = `team-name-${i}`;
+    nameLabel.textContent = `${i + 1}. csapat neve`;
+
+    const nameInp = document.createElement('input');
+    nameInp.className = 'name-inp';
+    nameInp.type = 'text';
+    nameInp.id = `team-name-${i}`;
+    nameInp.placeholder = `${i + 1}. csapat neve`;
+    nameInp.value = prevNames[i] || '';
+    nameInp.style.borderColor = TEAM_COLORS[i].main + '99';
+    nameInp.style.color       = TEAM_COLORS[i].main;
+
+    const playersLabel = document.createElement('label');
+    playersLabel.className = 'field-label';
+    playersLabel.htmlFor = `team-players-${i}`;
+    playersLabel.textContent = 'Játékosok (opcionális)';
+
+    const playersInp = document.createElement('textarea');
+    playersInp.className = 'players-inp';
+    playersInp.id = `team-players-${i}`;
+    playersInp.placeholder = 'Soronként egy név';
+    playersInp.value = prevPlayers[i] || '';
+    playersInp.rows = 2;
+
+    block.appendChild(nameLabel);
+    block.appendChild(nameInp);
+    block.appendChild(playersLabel);
+    block.appendChild(playersInp);
+    g.appendChild(block);
+  }
+}
+buildNameInputs();
+
+function requestFullscreen() {
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+  if (req) req.call(el).catch(() => {});
+}
+
+function exitFullscreen() {
+  const ex = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+  if (ex) ex.call(document).catch(() => {});
+}
+
+function isFullscreen() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+}
+
+function toggleFullscreen() {
+  if (isFullscreen()) exitFullscreen(); else requestFullscreen();
+}
+
+function updateFsBtn() {
+  const btn = document.getElementById('fs-btn');
+  if (btn) btn.textContent = isFullscreen() ? '✕ Kilépés' : '⛶ Teljes';
+}
+
+document.addEventListener('fullscreenchange', updateFsBtn);
+document.addEventListener('webkitfullscreenchange', updateFsBtn);
+document.addEventListener('mozfullscreenchange', updateFsBtn);
+
+function startGame() {
+  initAudio();
+  const blocks = [...document.querySelectorAll('.team-block')];
+  teams = blocks.map((block, i) => {
+    const nameVal = block.querySelector('.name-inp').value.trim();
+    const playersVal = block.querySelector('.players-inp').value;
+    const players = playersVal
+      .split('\n')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+    return {
+      id:    i,
+      name:  nameVal || `${i + 1}. Csapat`,
+      score: 0,
+      color: TEAM_COLORS[i],
+      players: players,        // játékosnevek (lehet üres)
+    };
+  });
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('board').style.display  = 'flex';
+  turnIndex = -1;
+  globalTurn = -1;
+  roundNumber = 0;
+  updateRoundDisplay();
+  document.getElementById('game-info').style.display = 'flex';
+  startClock();
+  if (autoNextTimer) { clearTimeout(autoNextTimer); autoNextTimer = null; }
+  if (autoDismissTimer) { clearTimeout(autoDismissTimer); autoDismissTimer = null; }
+  if (roundBannerTimer) { clearTimeout(roundBannerTimer); roundBannerTimer = null; }
+  renderList(false);
+  showGestureHint();
+  requestFullscreen();
+  syncTeamsToFirebase();
+  // A játék elején rögtön kijelezzük az első csapatot ("Soron következik")
+  setTimeout(() => nextTeam(), 500);
+}
+
+function goSetup() {
+  document.getElementById('board').style.display  = 'none';
+  document.getElementById('setup').style.display  = 'flex';
+  document.getElementById('game-info').style.display = 'none';
+  if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
+  buildNameInputs();
+}
+
+/* ── CONTROLS SHOW/HIDE ─── */
+let controlsVisible = false;
+let hideTimer = null;
+
+function showControls() {
+  controlsVisible = true;
+  document.querySelector('.topbar').classList.add('visible');
+  document.querySelector('.inc-bar').classList.add('visible');
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(hideControls, 4000);
+}
+
+function hideControls() {
+  controlsVisible = false;
+  document.querySelector('.topbar').classList.remove('visible');
+  document.querySelector('.inc-bar').classList.remove('visible');
+}
+
+// Board background tap/touch: 2-finger tap OR long-press anywhere NOT on a rank-row or control
+let boardLongPressTimer = null;
+
+document.getElementById('board').addEventListener('touchstart', e => {
+  // Two-finger tap instantly shows controls
+  if (e.touches.length === 2) {
+    showControls();
+    return;
+  }
+  // Long press (600ms) on non-interactive area
+  boardLongPressTimer = setTimeout(() => {
+    showControls();
+  }, 600);
+}, { passive: true });
+
+document.getElementById('board').addEventListener('touchend', () => {
+  clearTimeout(boardLongPressTimer);
+}, { passive: true });
+
+document.getElementById('board').addEventListener('touchmove', () => {
+  clearTimeout(boardLongPressTimer);
+}, { passive: true });
+
+// Clicking control buttons resets the hide timer
+document.querySelectorAll('.tbb, .inc-pill').forEach(btn => {
+  btn.addEventListener('click', () => {
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(hideControls, 4000);
+  });
+});
+
+/* ── INCREMENT ───────────────────────────────────── */
+function setIncrement(n, el) {
+  increment = n;
+  document.querySelectorAll('.inc-pill').forEach(p => p.classList.remove('on'));
+  el.classList.add('on');
+}
+
+/* ── SCORE LOGIC ─────────────────────────────────── */
+function getSortedTeams() {
+  return [...teams].sort((a, b) => b.score - a.score || a.id - b.id);
+}
+
+function getRankMap() {
+  const map = {};
+  getSortedTeams().forEach((t, i) => map[t.id] = i);
+  return map;
+}
+
+function adjustScore(teamId, direction) {
+  applyScore(teamId, direction * increment);
+}
+
+// General-purpose score change by a signed amount (used by gestures AND Firebase points)
+function applyScore(teamId, delta, allowNegative) {
+  // A teamId néha stringként érkezik (pl. a Rabló App Firebase-be írt
+  // jelentkezéséből), a helyi teams[].id viszont mindig szám - loose
+  // összehasonlítás nélkül a csapat sosem található meg, és a pontozás
+  // csendben semmit sem csinál.
+  const team = teams.find(t => String(t.id) === String(teamId));
+  if (!team) return;
+
+  // Sikertelen feladvány - a csapat 0 pontot kap. A pontszám nem változik,
+  // de vizuálisan is jelezzük (lebegő "0" jelzés), hogy ne tűnjön úgy,
+  // mintha semmi sem történt volna a kör végén.
+  if (!delta) { renderList(true, team.id, 0, 0); pushLog(`⚪ ${team.name}: 0 pont (sikertelen feladvány)`); return; }
+
+  const ranksBefore = getRankMap();
+  const prevScore   = team.score;
+  team.score        = allowNegative ? (team.score + delta) : Math.max(0, team.score + delta);
+  if (team.score === prevScore) return;
+
+  const actualDelta = team.score - prevScore;
+  const rankChanged = getRankMap()[team.id] !== ranksBefore[team.id];
+
+  renderList(true, team.id, actualDelta > 0 ? 1 : -1, Math.abs(actualDelta));
+
+  if (actualDelta > 0) soundAdd();
+  else soundRemove();
+  if (rankChanged) setTimeout(soundRankChange, 170);
+
+  pushLog(`${actualDelta > 0 ? '🟢' : '🔴'} ${team.name}: ${actualDelta > 0 ? '+' : ''}${actualDelta} pont (összesen: ${team.score})`);
+  syncTeamsToFirebase();
+}
+
+function doReset() {
+  if (!confirm('Nullázod az összes pontot?')) return;
+  teams.forEach(t => t.score = 0);
+  renderList(false);
+  syncTeamsToFirebase();
+}
+
+/* ── RENDER ──────────────────────────────────────── */
+function renderList(animate, changedId, deltaDir, deltaAmount) {
+  const list   = document.getElementById('rank-list');
+  const sorted = getSortedTeams();
+
+  // FLIP — record positions before clearing
+  const oldPos = {};
+  [...list.querySelectorAll('.rank-row')].forEach(row => {
+    oldPos[Number(row.dataset.id)] = row.getBoundingClientRect();
+  });
+
+  // Rebuild
+  list.innerHTML = '';
+  sorted.forEach((team, rank) => {
+    const row = makeRow(team, rank, !animate);
+    list.appendChild(row);
+    attachTouchHandlers(row, team.id);
+  });
+
+  // Show delta float indicator
+  if (changedId != null && deltaDir != null) {
+    const changedRow = list.querySelector(`[data-id="${changedId}"]`);
+    if (changedRow) {
+      const di = changedRow.querySelector('.delta');
+      if (di) {
+        di.textContent = deltaDir === 0 ? '0' : (deltaDir > 0 ? '+' : '−') + (deltaAmount != null ? deltaAmount : increment);
+        di.className   = 'delta ' + (deltaDir === 0 ? 'zero' : (deltaDir > 0 ? 'up' : 'dn'));
+        // Clean up after animation
+        setTimeout(() => { if (di) di.className = 'delta'; }, 980);
+      }
+    }
+  }
+
+  // Score pop + shockwave (a 0 pontos jelzésnél nincs pop/shock, hiszen
+  // a pontszám ténylegesen nem változott - csak a lebegő "0" jelenik meg)
+  if (animate && changedId != null && deltaDir !== 0) {
+    const changedRow = list.querySelector(`[data-id="${changedId}"]`);
+    const scoreEl = changedRow ? changedRow.querySelector('.team-score') : null;
+    if (scoreEl) {
+      scoreEl.classList.remove('pop');
+      void scoreEl.offsetWidth;
+      scoreEl.classList.add('pop');
+    }
+    if (changedRow) {
+      changedRow.classList.remove('shock');
+      void changedRow.offsetWidth;
+      changedRow.classList.add('shock');
+      setTimeout(() => changedRow.classList.remove('shock'), 650);
+    }
+  }
+
+  // FLIP animate reordering
+  if (animate) {
+    [...list.querySelectorAll('.rank-row')].forEach(row => {
+      const id  = Number(row.dataset.id);
+      const old = oldPos[id];
+      if (!old) return;
+      const newRect = row.getBoundingClientRect();
+      const dy = old.top - newRect.top;
+      if (Math.abs(dy) > 2) {
+        row.style.transform  = `translateY(${dy}px)`;
+        row.style.transition = 'none';
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          row.style.transition = 'transform .55s cubic-bezier(.34,1.1,.64,1)';
+          row.style.transform  = '';
+        }));
+      }
+    });
+  }
+}
+
+function makeRow(team, rank, entrance) {
+  const row = document.createElement('div');
+  row.className  = 'rank-row' + (rank < 3 ? ` r${rank + 1}` : '') + (entrance ? ' enter' : '');
+  row.dataset.id = team.id;
+  if (entrance) row.style.setProperty('--i', rank);
+
+  row.innerHTML = `
+    <div class="flash left"  id="fl-l-${team.id}"></div>
+    <div class="flash right" id="fl-r-${team.id}"></div>
+    <div class="shockring" style="color:${team.color.main}"></div>
+    <div class="rank-badge">
+      ${rank < 3 ? `<div class="medal">${MEDALS[rank]}</div>` : ''}
+      <div class="rank-num">#${rank + 1}</div>
+    </div>
+    <div class="stripe" style="background:${team.color.main};box-shadow:0 0 10px ${team.color.glow};color:${team.color.main}"></div>
+    <div class="team-content">
+      <div class="team-name"  style="color:${team.color.main}">${escHtml(team.name)}</div>
+      <div class="team-score" style="color:${team.color.main};text-shadow:0 0 18px ${team.color.glow}">${team.score}</div>
+    </div>
+    <div class="delta"></div>
+  `;
+  return row;
+}
+
+/* ── TOUCH GESTURE HANDLER ───────────────────────── */
+function attachTouchHandlers(row, teamId) {
+  let startX, startY;
+
+  row.addEventListener('touchstart', e => {
+    const touch = e.touches[0];
+    startX = touch.clientX;
+    startY = touch.clientY;
+    e.preventDefault();        // prevent scroll & browser gestures
+  }, { passive: false });
+
+  row.addEventListener('touchend', e => {
+    const touch = e.changedTouches[0];
+    const dx    = touch.clientX - startX;
+    const dy    = touch.clientY - startY;
+    const adx   = Math.abs(dx);
+    const ady   = Math.abs(dy);
+    const isSwipe = adx > 35 || ady > 35;
+
+    if (!isSwipe) return;
+
+    let dir = 0;
+    if (ady >= adx) {
+      // Vertical swipe: UP = +, DOWN = −
+      dir = dy < 0 ? 1 : -1;
+    } else {
+      // Horizontal swipe: RIGHT = +, LEFT = −
+      dir = dx > 0 ? 1 : -1;
+    }
+
+    showFlash(teamId, dir > 0 ? 'right' : 'left');
+    adjustScore(teamId, dir);
+  }, { passive: true });
+}
+
+function showFlash(teamId, side) {
+  const el = document.getElementById(`fl-${side === 'right' ? 'r' : 'l'}-${teamId}`);
+  if (!el) return;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 190);
+}
+
+/* ── TURN ROTATION + ROUND TRACKING ──────────────────
+   A rotáció csapatonként váltakozik. Egy csapat játékosa
+   akkor lép a következőre, amikor újra az a csapat jön.
+   Egy KÖR akkor zárul, amikor MINDEN csapatból MINDENKI
+   sorra került egyszer (a legtöbb játékossal bíró csapat
+   játékosszáma határozza meg a kör hosszát).
+
+   Példa (2 csapat, 2-2 játékos):
+     1. kör: T-Patrik, K-Balázs, T-Dorina, K-Szandi
+     2. kör: T-Patrik, K-Balázs, ...
+─────────────────────────────────────────────────── */
+function nextTeam() {
+  if (!teams.length) return;
+
+  // ha épp kör-banner pörög, töröljük a függőben lévő átmenetet
+  if (roundBannerTimer) { clearTimeout(roundBannerTimer); roundBannerTimer = null; }
+
+  globalTurn++;                               // globális lépésszámláló (0-tól)
+  turnIndex = globalTurn % teams.length;      // melyik csapat van soron
+
+  const maxPlayers = getMaxPlayers();
+  const roundLength = teams.length * maxPlayers; // ennyi lépés egy teljes kör
+  const newRoundJustStarted = (globalTurn % roundLength === 0);
+
+  if (newRoundJustStarted) {
+    roundNumber = Math.floor(globalTurn / roundLength) + 1;
+    showRoundBanner(roundNumber, showCurrentTeamTurn);
+  } else {
+    showCurrentTeamTurn();
+  }
+  syncTeamsToFirebase();
+}
+
+// A legtöbb játékossal bíró csapat játékosszáma (legalább 1).
+function getMaxPlayers() {
+  let m = 1;
+  teams.forEach(t => { if (t.players && t.players.length > m) m = t.players.length; });
+  return m;
+}
+
+function showCurrentTeamTurn() {
+  const team = teams[turnIndex];
+  if (!team) return;
+
+  const ov = document.getElementById('turn-overlay');
+  const nameEl = document.getElementById('turn-name-el');
+  nameEl.textContent = team.name;
+  nameEl.style.color = team.color.main;
+  nameEl.style.textShadow = `0 0 40px ${team.color.glow}`;
+  ov.style.setProperty('--turn-glow', team.color.glow);
+  ov.style.background = `rgba(0,0,0,.55)`;
+
+  // Soron lévő játékos: a kör száma alapján rotál a csapaton belül
+  const playerEl = document.getElementById('turn-player-el');
+  const player = getActivePlayer(team);
+  if (player) {
+    playerEl.innerHTML = `<span class="tp-label">Játékos</span>${escHtml(player)}`;
+    playerEl.classList.add('show');
+  } else {
+    playerEl.textContent = '';
+    playerEl.classList.remove('show');
+  }
+
+  // re-trigger entrance animations
+  ov.classList.remove('show');
+  void ov.offsetWidth;
+  ov.classList.add('show');
+
+  soundNextTurn(team.color.main);
+}
+
+// A csapat aktuális játékosa: ahányszor már sorra került a csapat, annyiadik
+// játékosa jön (körbeforogva). A "team-cycle" = hányszor jött már ez a csapat.
+function getActivePlayer(team) {
+  if (!team.players || team.players.length === 0) return null;
+  const cycle = Math.floor(globalTurn / teams.length); // hányadszor jön a csapat (0-tól)
+  const idx = cycle % team.players.length;
+  return team.players[idx];
+}
+
+function showRoundBanner(n, cb) {
+  const ov = document.getElementById('round-overlay');
+  document.getElementById('round-number-el').textContent = n + '. KÖR';
+  ov.classList.remove('show');
+  void ov.offsetWidth;
+  ov.classList.add('show');
+
+  soundRoundStart();
+
+  if (roundBannerTimer) clearTimeout(roundBannerTimer);
+  roundBannerTimer = setTimeout(() => {
+    roundBannerTimer = null;
+    ov.classList.remove('show');
+    if (cb) cb();
+  }, 5000);
+}
+
+function closeRoundBanner() {
+  if (roundBannerTimer) { clearTimeout(roundBannerTimer); roundBannerTimer = null; }
+  document.getElementById('round-overlay').classList.remove('show');
+}
+
+function updateRoundDisplay() {
+  /* a kör már nem jelenik meg folyamatosan a sarokban — csak az "Új kör" banner jelzi */
+}
+
+/* ── ÖSSZESÍTETT ÓRA (játék kezdete óta) ─────────── */
+function startClock() {
+  gameStartTime = Date.now();
+  if (clockInterval) clearInterval(clockInterval);
+  updateClock();
+  clockInterval = setInterval(updateClock, 1000);
+}
+
+function updateClock() {
+  if (!gameStartTime) return;
+  let sec = Math.floor((Date.now() - gameStartTime) / 1000);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const pad = n => String(n).padStart(2, '0');
+  const txt = h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+  const el = document.getElementById('gi-clock');
+  if (el) el.textContent = txt;
+}
+
+function closeTurn() {
+  document.getElementById('turn-overlay').classList.remove('show');
+}
+
+/* ── WINNER ──────────────────────────────────────── */
+function showWinner() {
+  if (teams.every(t => t.score === 0)) { alert('Még nincs pontszám!'); return; }
+  const winner = getSortedTeams()[0];
+  document.getElementById('w-name-el').textContent  = winner.name;
+  document.getElementById('w-name-el').style.color  = winner.color.main;
+  document.getElementById('w-score-el').textContent = `${winner.score} pont`;
+  document.getElementById('winner-overlay').style.display = 'flex';
+  soundWinner();
+  AudioLibrary.playEvent(currentCategoryId, 'winner');
+  launchConfetti(winner.color.main);
+  pushLog(`🏆 Győztes: ${winner.name} (${winner.score} pont)`);
+}
+
+function closeWinner() {
+  document.getElementById('winner-overlay').style.display = 'none';
+  stopConfetti();
+}
+
+/* ── CONFETTI ─────────────────────────────────────── */
+let confettiActive = false;
+let confettiParts  = [];
+let confettiRaf;
+const CONFETTI_COLORS = ['#1ec8ff','#FF4757','#2ED573','#2F80ED','#9B59B6','#E91E63','#F39C12','#00BCD4'];
+
+function launchConfetti(accentColor) {
+  const cv = document.getElementById('confetti-canvas');
+  cv.style.display = 'block';
+  cv.width  = innerWidth;
+  cv.height = innerHeight;
+  const ctx = cv.getContext('2d');
+  confettiActive = true;
+  confettiParts  = [];
+  const palette = [...CONFETTI_COLORS, accentColor];
+
+  for (let i = 0; i < 250; i++) {
+    const isCircle = Math.random() < 0.28;
+    confettiParts.push({
+      x: Math.random() * cv.width,
+      y: Math.random() * cv.height - cv.height,
+      w: isCircle ? Math.random() * 10 + 5 : Math.random() * 14 + 5,
+      h: isCircle ? 0 : Math.random() * 6 + 2,
+      color: palette[i % palette.length],
+      isCircle,
+      speed:  Math.random() * 4 + 2,
+      rot:    Math.random() * 360,
+      rotV:   (Math.random() - 0.5) * 10,
+      driftX: (Math.random() - 0.5) * 1.5,
+      wobble: Math.random() * 2.5,
+      wobOff: Math.random() * Math.PI * 2,
+    });
+  }
+
+  let tick = 0;
+  (function draw() {
+    if (!confettiActive) return;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    confettiParts.forEach(p => {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot * Math.PI / 180);
+      ctx.fillStyle = p.color;
+      if (p.isCircle) {
+        ctx.beginPath();
+        ctx.arc(0, 0, p.w / 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      }
+      ctx.restore();
+      p.y    += p.speed;
+      p.x    += p.driftX + Math.sin(tick * 0.04 + p.wobOff) * p.wobble;
+      p.rot  += p.rotV;
+      if (p.y > cv.height) { p.y = -20; p.x = Math.random() * cv.width; }
+    });
+    tick++;
+    confettiRaf = requestAnimationFrame(draw);
+  })();
+}
+
+function stopConfetti() {
+  confettiActive = false;
+  cancelAnimationFrame(confettiRaf);
+  const cv = document.getElementById('confetti-canvas');
+  cv.style.display = 'none';
+  cv.getContext('2d').clearRect(0, 0, cv.width, cv.height);
+}
+
+window.addEventListener('resize', () => {
+  const cv = document.getElementById('confetti-canvas');
+  cv.width  = innerWidth;
+  cv.height = innerHeight;
+});
+
+/* ── AUDIO (Web Audio API — no external files) ────── */
+let audioCtx = null;
+
+function initAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+}
+
+function playTone(freq, type, duration, volume = 0.3, delay = 0) {
+  if (!audioCtx) return;
+  const osc  = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.type = type;
+  const startAt = audioCtx.currentTime + delay;
+  osc.frequency.setValueAtTime(freq, startAt);
+  gain.gain.setValueAtTime(volume, startAt);
+  gain.gain.exponentialRampToValueAtTime(0.001, startAt + duration);
+  osc.start(startAt);
+  osc.stop(startAt + duration);
+}
+
+function soundAdd() {
+  initAudio();
+  // Ascending ding: C5 → E5 → G5
+  playTone(523, 'sine', 0.12, 0.35, 0.00);
+  playTone(659, 'sine', 0.15, 0.30, 0.08);
+  playTone(784, 'sine', 0.20, 0.40, 0.16);
+}
+
+function playNoiseBurst(delay, dur, volume, filterFreq) {
+  if (!audioCtx) return;
+  try {
+    const startAt = audioCtx.currentTime + delay;
+    const bufLen = Math.floor(audioCtx.sampleRate * dur);
+    const buf = audioCtx.createBuffer(1, bufLen, audioCtx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = filterFreq || 1500;
+    filter.Q.value = 0.7;
+    const g = audioCtx.createGain();
+    g.gain.value = volume;
+    g.gain.setTargetAtTime(0, startAt + dur * 0.5, dur * 0.25);
+    g.connect(audioCtx.destination);
+    src.connect(filter); filter.connect(g);
+    src.start(startAt); src.stop(startAt + dur);
+  } catch(e) {}
+}
+
+// Ünneplő/győzelmi hang (áthelyezve a konzolról a kivetítőre 2026-07-15-én) -
+// felfelé szökő fanfár + taps-szerű zajimpulzusok.
+function soundCheer() {
+  initAudio();
+  [[523,0],[659,0.09],[784,0.18],[1046,0.27]].forEach(([freq, delay]) => {
+    playTone(freq, 'triangle', 0.22, 0.3, delay);
+  });
+  playTone(1046, 'sine', 0.5, 0.32, 0.27);
+  playTone(1318, 'sine', 0.45, 0.22, 0.35);
+  for (let i = 0; i < 14; i++) {
+    playNoiseBurst(0.05 + Math.random() * 0.9, 0.04 + Math.random() * 0.03, 0.18, 2500 + Math.random() * 2000);
+  }
+  for (let i = 0; i < 10; i++) {
+    playNoiseBurst(0.6 + Math.random() * 0.5, 0.03 + Math.random() * 0.02, 0.16, 3000 + Math.random() * 1500);
+  }
+}
+
+function soundRemove() {
+  initAudio();
+  // Descending thud
+  playTone(440, 'triangle', 0.08, 0.30, 0.00);
+  playTone(330, 'triangle', 0.20, 0.35, 0.07);
+}
+
+// "Lejárt az idő" duda hang (áthelyezve a konzolról a kivetítőre 2026-07-15-én).
+function soundBuzzer() {
+  initAudio();
+  playTone(120, 'sawtooth', 1.2, 0.32, 0);
+  playTone(118, 'square', 1.2, 0.28, 0);
+  playTone(100, 'sawtooth', 0.8, 0.22, 0.4);
+}
+
+function soundRankChange() {
+  initAudio();
+  // Rising sweep — rank change notification
+  playTone(600,  'sine', 0.08, 0.20, 0.00);
+  playTone(800,  'sine', 0.10, 0.20, 0.09);
+  playTone(1050, 'sine', 0.12, 0.22, 0.18);
+}
+
+// Rablás hangjai (2026-07-15) ---
+function soundRobberyClaim() {
+  initAudio();
+  playTone(1500, 'square', 0.05, 0.22, 0);
+  playTone(1900, 'square', 0.06, 0.18, 0.05);
+}
+function soundRobberyAlert() {
+  initAudio();
+  playTone(200, 'sawtooth', 0.15, 0.3, 0);
+  playTone(400, 'sawtooth', 0.15, 0.25, 0.12);
+  playTone(600, 'sawtooth', 0.25, 0.28, 0.24);
+}
+
+function soundWinner() {
+  initAudio();
+  // First fanfare
+  [523, 659, 784, 1047].forEach((f, i) => playTone(f, 'sine', 0.40, 0.40, i * 0.12));
+  // Second fanfare (higher)
+  setTimeout(() => {
+    [523, 659, 784, 1047, 1319].forEach((f, i) => playTone(f, 'triangle', 0.50, 0.45, i * 0.10));
+  }, 600);
+}
+
+function soundNextTurn() {
+  initAudio();
+  // Attention chime — bright two-note "ding-dong"
+  playTone(880,  'sine', 0.18, 0.35, 0.00);
+  playTone(1175, 'sine', 0.28, 0.38, 0.14);
+}
+
+function soundRoundStart() {
+  initAudio();
+  // Emelkedő hármashangzat — új kör kezdete
+  playTone(440, 'sine', 0.18, 0.30, 0.00);
+  playTone(587, 'sine', 0.18, 0.32, 0.13);
+  playTone(880, 'sine', 0.35, 0.38, 0.26);
+}
+
+/* ── GESTURE HINT ─────────────────────────────────── */
+function showGestureHint() {
+  const existing = document.getElementById('gesture-hint');
+  if (existing) existing.remove();
+  const hint = document.createElement('div');
+  hint.id = 'gesture-hint';
+  hint.textContent = '← −pont  |  +pont →  ·  2 ujj = beállítások';
+  document.body.appendChild(hint);
+  setTimeout(() => hint.remove(), 5000);
+}
+
+/* ── UTILS ───────────────────────────────────────── */
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ═══════════════════════════════════════════════════
+   FIREBASE — valós idejű kapcsolat a JÁTÉK apphoz
+   ═══════════════════════════════════════════════════ */
+
+// ⚠️ A saját Firebase projekted configja (közös a játék-apppal).
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyCaQYwKXkmTyKX-oUDYnvYmXeyP9PR8WEU",
+  authDomain:        "activity-centrum.firebaseapp.com",
+  databaseURL:       "https://activity-centrum-default-rtdb.firebaseio.com",
+  projectId:         "activity-centrum",
+  storageBucket:     "activity-centrum.firebasestorage.app",
+  messagingSenderId: "1008452626252",
+  appId:             "1:1008452626252:web:2f5f542e7b4785fa4551e9"
+};
+
+const RING_CIRCUMFERENCE = 2 * Math.PI * 45; // r=45 → ~283
+let lastGameStatus = null;
+let currentCategoryId = '';   // az aktuális kör kategóriája - a rablás-hangokhoz is kell
+// A rablás-lezáró setTimeout-láncok (handleRobberySuccess/Failed) 2-3 mp-cel
+// később írnak a Firebase-be. Ha eközben már ÚJ kör indult (ami resetelte a
+// activityRobbery node-ot), ezek a késői írások korábban visszaírhatták a
+// régi, már lezárt rablást - emiatt "ragadt be" a rablás-jelzés a következő
+// kör(ök)re is. Minden új kör indulásakor növeljük az epoch-ot, és minden
+// késleltetett rablás-írás előtt ellenőrizzük, hogy még ugyanaz az epoch
+// van-e érvényben - ha nem, a késői írás egyszerűen elmarad.
+let robberyEpoch = 0;
+let lastTimeLeft   = null;
+
+// Az időzítő megjelenítése/hangja SAJÁT, pontosan 1 mp-es helyi ütemben fut,
+// nem a Firebase-üzenetek (hálózat-függő, szabálytalan időzítésű) érkezésekor -
+// a beérkező adat csak a "valós" értékhez való drift-korrekcióra szolgál.
+let localTickInterval = null;
+let localLeftValue = null;
+let localTotalValue = null;
+function stopLocalTimerTick() {
+  if (localTickInterval) { clearInterval(localTickInterval); localTickInterval = null; }
+}
+
+// A jelenleg KIJELZETT eredmény (érintéses pont-hozzáadáshoz)
+let currentResult  = null;  // { status, word, points } vagy null
+let resultConsumed = false; // true, ha már elrejtettük/feldolgoztuk az aktuális eredményt
+
+// Eredmény elrejtése után az automatikus "következő csapat" időzítője
+let autoNextTimer = null;
+// Az eredmény (solved/timeout) automatikus "kattintásának" időzítője (10 mp)
+let autoDismissTimer = null;
+
+// Modul-szintű DB hivatkozás, hogy a pontozó/léptető függvények is írhassanak
+let fbDb = null;
+
+/* A csapatok + pontok közzététele a távvezérlőnek (soundboard).
+   Külön node (activityTeams), hogy ne keveredjen a játékállapottal. */
+function syncTeamsToFirebase() {
+  if (!fbDb || !teams.length) return;
+  const payload = {
+    teams: teams.map(t => ({
+      id: t.id,
+      name: t.name,
+      score: t.score,
+      color: (t.color && t.color.main) ? t.color.main : '#888'
+    })),
+    turnIndex: turnIndex,
+    updatedAt: Date.now()
+  };
+  fbDb.ref('activityTeams').set(payload).catch(() => {});
+}
+
+/* A távvezérlőről (soundboard) érkező pont-parancsok fogadása.
+   A remote a activityControl/scoreQueue alá push-ol {teamId, delta, ts}-t,
+   itt sorban alkalmazzuk applyScore-ral (animáció + hang), majd töröljük. */
+function attachScoreCommandListener() {
+  if (!fbDb) return;
+  const startTs = Date.now();
+  const qref = fbDb.ref('activityControl/scoreQueue');
+  qref.on('child_added', snap => {
+    const cmd = snap.val();
+    snap.ref.remove().catch(() => {});            // azonnali törlés, hogy ne ismétlődjön
+    if (!cmd || typeof cmd.delta !== 'number') return;
+    if (cmd.ts && cmd.ts < startTs - 2000) return; // korábbi menet maradék parancsa → kihagyjuk
+    applyScore(cmd.teamId, cmd.delta);
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   RABLÁS MECHANIKA
+   A rabló csapatok a Rabló Appból (rablo_app.html) jeleznek az
+   "activityRobbery/queue" node-ba (push, {teamId, teamName, ts}).
+   A GM App vezérli a "currentIndex"/"phase" mezőket (ki próbálkozik éppen,
+   megoldotta-e). A kivetítő csak MEGJELENÍTI, amit lát - nem ő dönt.
+   ═══════════════════════════════════════════════════ */
+let robberyQueue = [];
+let robberyCurrentIndex = -1;
+let robberyPhase = 'collecting';
+let lastRobberyQueueLen = 0;
+let lastRobberyPhase = null;
+let lastRobberyIndex = -1;
+// Amíg igaz, a kivetítő MAGA vezeti végig a kör lezárását (pontozás + következő
+// csapat) - a normál "koppints az eredményre" / 10 mp-es automatika ki van kapcsolva,
+// hogy ne ütközzön össze a rablás saját, 3+3 mp-es ütemezésével.
+let robberyActive = false;
+
+function attachRobberyListener() {
+  if (!fbDb) return;
+  fbDb.ref('activityRobbery').on('value', snap => {
+    const raw = snap.val() || {};
+    const queueObj = raw.queue || {};
+    robberyQueue = Object.values(queueObj).sort((a, b) => a.ts - b.ts);
+    robberyCurrentIndex = (typeof raw.currentIndex === 'number') ? raw.currentIndex : -1;
+    robberyPhase = raw.phase || 'collecting';
+    renderRobbery();
+  });
+}
+
+function renderRobbery() {
+  const liveEl = document.getElementById('robbery-live');
+  const listEl = document.getElementById('rb-live-list');
+  const bannerEl = document.getElementById('robbery-banner');
+
+  // --- Élő jelentkezési lista (csak visszaszámlálás/időzítő futása közben) ---
+  const timerRunning = lastGameStatus === 'running';
+  if (timerRunning && robberyPhase === 'collecting' && robberyQueue.length > 0) {
+    liveEl.classList.add('show');
+    listEl.innerHTML = robberyQueue.map((e, i) => `
+      <div class="rb-live-item"><span class="rb-rank">${i + 1}.</span>${escHtml(e.teamName || '')}</div>
+    `).join('');
+  } else {
+    liveEl.classList.remove('show');
+    listEl.innerHTML = '';
+  }
+  if (robberyQueue.length > lastRobberyQueueLen) soundRobberyClaim();
+  lastRobberyQueueLen = robberyQueue.length;
+
+  // --- Diszkrét rablás-jelzés a rajzfelület tetején (a nagy verzió itt nem
+  // látszana, a rajzréteg a ponttábla fölött van) ---
+  const badgeEl = document.getElementById('dl-robbery-badge');
+  const badgeTextEl = document.getElementById('dl-robbery-badge-text');
+  if (DrawLayer.isOpen() && timerRunning && robberyPhase === 'collecting' && robberyQueue.length > 0) {
+    badgeTextEl.textContent = `🚨 Rablás: ${robberyQueue.length} jelentkező`;
+    badgeEl.classList.add('show');
+  } else if (DrawLayer.isOpen() && robberyPhase === 'attempting' && robberyQueue[robberyCurrentIndex]) {
+    badgeTextEl.textContent = `🚨 Rablás: ${robberyQueue[robberyCurrentIndex].teamName || ''} próbálkozik`;
+    badgeEl.classList.add('show');
+  } else {
+    badgeEl.classList.remove('show');
+  }
+
+  // --- Nagy "RABLÁS" képernyő (lejárt idő + van jelentkező, GM App vezérli) ---
+  if (robberyPhase === 'attempting' && robberyQueue[robberyCurrentIndex]) {
+    if (lastRobberyPhase !== 'attempting') {
+      // Most veszi át a kivetítő a kör lezárásának irányítását a normál
+      // automatikától - töröljük a "sima lejárt idő" 10 mp-es időzítőjét,
+      // mert az rossz csapatnak/rossz összeggel zárná le a kört.
+      robberyActive = true;
+      if (autoDismissTimer) { clearTimeout(autoDismissTimer); autoDismissTimer = null; }
+      soundRobberyAlert();
+    } else if (robberyCurrentIndex !== lastRobberyIndex) {
+      soundRobberyAlert();
+    }
+    document.getElementById('rb-team-name').textContent = robberyQueue[robberyCurrentIndex].teamName || '';
+    bannerEl.classList.add('show');
+  } else {
+    bannerEl.classList.remove('show');
+  }
+
+  // --- Sikeres rablás (a GM App "Megoldva" gombjára) ---
+  if (robberyPhase === 'success' && lastRobberyPhase !== 'success' && robberyQueue[robberyCurrentIndex]) {
+    handleRobberySuccess(robberyQueue[robberyCurrentIndex]);
+  }
+
+  // --- Sikertelen próbálkozás (a GM App "Nem talált" gombjára) ---
+  if (robberyPhase === 'failed' && lastRobberyPhase !== 'failed' && robberyQueue[robberyCurrentIndex]) {
+    handleRobberyFailed(robberyQueue[robberyCurrentIndex]);
+  }
+
+  // --- Rablás kifogyott (biztonsági tartalék, ha valahonnan közvetlenül ezt kapnánk) ---
+  if (robberyPhase === 'exhausted' && lastRobberyPhase !== 'exhausted') {
+    revealAnswerThenAdvance();
+  }
+  lastRobberyPhase = robberyPhase;
+  lastRobberyIndex = robberyCurrentIndex;
+}
+
+// Sikeres rablás: SAJÁT, a normál "megoldva" automatikától teljesen független
+// ütemezés - így nem ütközik/ugrik a kör, és mindig pontosan +1 pontot kap a
+// rabló csapat (sosem a feladvány saját 1/2/3 pontos értékét).
+function handleRobberySuccess(claimant) {
+  const epoch = robberyEpoch;   // ha közben új kör indul, ez elavulttá válik
+  document.getElementById('robbery-banner').classList.remove('show');
+  const el = document.getElementById('robbery-success');
+  document.getElementById('rs-word').textContent = (currentResult && currentResult.word) || '';
+  document.getElementById('rs-team').textContent = claimant.teamName || '';
+  el.classList.add('show');
+  soundCheer();
+  AudioLibrary.stopEvent();
+  AudioLibrary.playEvent(currentCategoryId, 'solved');
+
+  setTimeout(() => {
+    if (robberyEpoch !== epoch) return;   // közben már új kör indult - ne nyúljunk hozzá
+    el.classList.remove('show');
+    hideGameOverlay();
+    resultConsumed = true;
+    currentResult = null;
+    if (claimant.teamId != null) applyScore(claimant.teamId, 1); // fix +1, itt animál a ponttáblán
+
+    setTimeout(() => {
+      if (robberyEpoch !== epoch) return;
+      robberyActive = false;
+      if (fbDb) fbDb.ref('activityRobbery').set({ queue: null, currentIndex: -1, phase: 'collecting' });
+      nextTeam();
+    }, 3000);
+  }, 3000);
+}
+
+// Sikertelen próbálkozás. Két eset:
+//  a) van még jelentkező: "Rablás sikertelen!" (3mp) -> a pont láthatóan
+//     levonódik a ponttáblán -> jön a következő rabló csapat neve.
+//  b) nincs több jelentkező: "Rablás sikertelen!" (3mp) -> a helyes válasz
+//     (3mp) -> a pont láthatóan levonódik a ponttáblán -> következő kör.
+// A helyes választ SOSEM fedjük fel, amíg van még próbálkozó csapat.
+function handleRobberyFailed(claimant) {
+  const epoch = robberyEpoch;   // ha közben új kör indul, ez elavulttá válik
+  document.getElementById('robbery-banner').classList.remove('show');
+  const el = document.getElementById('robbery-failed');
+  document.getElementById('rf-team').textContent = claimant.teamName || '';
+  el.classList.add('show');
+  soundBuzzer();
+  AudioLibrary.stopEvent();
+  AudioLibrary.playEvent(currentCategoryId, 'timeout');
+
+  // A sorban lévő következő csapatot (ha van) és a szót MOST, a hívás
+  // pillanatában rögzítjük - nem a késleltetett callback-ekben olvassuk ki
+  // újra a (közben esetleg megváltozó) globális változókból.
+  const nextIndex = robberyCurrentIndex + 1;
+  const nextClaimant = robberyQueue[nextIndex];
+  const wordSnapshot = (currentResult && currentResult.word) || '';
+
+  setTimeout(() => {
+    if (robberyEpoch !== epoch) return;   // közben már új kör indult - ne nyúljunk hozzá
+    el.classList.remove('show');
+
+    if (nextClaimant) {
+      // Van még jelentkező - a választ nem fedjük fel, de a pontlevonás
+      // láthatóan lejátszódik a ponttáblán, mielőtt a következő név megjelenne.
+      hideGameOverlay();
+      if (claimant.teamId != null) applyScore(claimant.teamId, -1, true);
+      setTimeout(() => {
+        if (robberyEpoch !== epoch) return;
+        if (fbDb) fbDb.ref('activityRobbery').update({ currentIndex: nextIndex, phase: 'attempting' });
+      }, 2000);
+    } else {
+      // Nincs több jelentkező - előbb a helyes válasz (3mp), utána AZUTÁN
+      // vonjuk le láthatóan a pontot, és csak ezután jöhet a következő kör.
+      const overlay = document.getElementById('game-overlay');
+      const resultBox = document.getElementById('gv-result');
+      document.getElementById('gv-icon').textContent = '⏱️';
+      document.getElementById('gv-word').textContent = wordSnapshot;
+      document.getElementById('gv-points').textContent = '';
+      resultBox.className = 'show gv-timeout';
+      overlay.classList.add('show');
+
+      setTimeout(() => {
+        if (robberyEpoch !== epoch) return;
+        hideGameOverlay();
+        if (claimant.teamId != null) applyScore(claimant.teamId, -1, true);
+
+        setTimeout(() => {
+          if (robberyEpoch !== epoch) return;
+          resultConsumed = true;
+          currentResult = null;
+          robberyActive = false;
+          if (fbDb) fbDb.ref('activityRobbery').set({ queue: null, currentIndex: -1, phase: 'collecting' });
+          nextTeam();
+        }, 2000);
+      }, 3000);
+    }
+  }, 3000);
+}
+
+// Biztonsági tartalék: ha valahonnan közvetlenül 'exhausted' fázist kapnánk
+// (nem a handleRobberyFailed-en keresztül), ugyanígy felfedjük a választ és
+// megyünk tovább - de pontlevonás nélkül, mert nem tudjuk, ki a próbálkozó.
+function revealAnswerThenAdvance() {
+  const epoch = robberyEpoch;   // ha közben új kör indul, ez elavulttá válik
+  const overlay = document.getElementById('game-overlay');
+  const resultBox = document.getElementById('gv-result');
+  document.getElementById('gv-icon').textContent = '⏱️';
+  document.getElementById('gv-word').textContent = (currentResult && currentResult.word) || '';
+  document.getElementById('gv-points').textContent = '';
+  resultBox.className = 'show gv-timeout';
+  overlay.classList.add('show');
+
+  setTimeout(() => {
+    if (robberyEpoch !== epoch) return;
+    hideGameOverlay();
+    resultConsumed = true;
+    currentResult = null;
+    robberyActive = false;
+    if (fbDb) fbDb.ref('activityRobbery').set({ queue: null, currentIndex: -1, phase: 'collecting' });
+    nextTeam();
+  }, 3000);
+}
+
+// Esemény-napló a GM App megnyitható log paneljéhez (pontváltozás, hangindítás,
+// hibák) - mindenki ugyanazt a "activityLog" Firebase listát bővíti.
+function pushLog(text) {
+  try { if (fbDb) fbDb.ref('activityLog').push({ ts: Date.now(), text: String(text) }); } catch (e) {}
+}
+
+function initFirebase() {
+  // Csak akkor indul, ha a config ki van töltve
+  if (!FIREBASE_CONFIG.databaseURL) {
+    console.warn('Firebase config nincs kitöltve — a valós idejű kapcsolat inaktív.');
+    return;
+  }
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    const db = firebase.database();
+    fbDb = db;
+    attachScoreCommandListener();
+    attachRobberyListener();
+    syncTeamsToFirebase();
+
+    // Kapcsolat-állapot jelző
+    db.ref('.info/connected').on('value', snap => {
+      const dot = document.getElementById('fb-status');
+      if (snap.val() === true) dot.className = 'connected';
+      else dot.className = '';
+    });
+
+    // Fő figyelő
+    db.ref('activityGame').on('value', snapshot => {
+      const data = snapshot.val();
+      if (!data) { hideGameOverlay(); return; }
+      renderScoreboardState(data);
+    }, err => {
+      console.error('Firebase hiba:', err);
+      document.getElementById('fb-status').className = 'error';
+    });
+
+    // Távoli indító-jel → 3-2-1 visszaszámláló a kivetítőn (a konzollal együtt fut)
+    // Csak akkor "baseline" (nem indít effektet), ha a jel a csatlakozás ELŐTT
+    // íródott - ha közben/utána, azonnal reagálunk (lásd js/firebase-sync.js).
+    let lastStartSignal = null;
+    const startAttachedAt = Date.now();
+    db.ref('activityGame/startSignal').on('value', snap => {
+      const v = snap.val();
+      if (v == null) return;
+      if (v === lastStartSignal) return;
+      const isStale = lastStartSignal === null && typeof v === 'number' && v < startAttachedAt;
+      lastStartSignal = v;
+      if (!isStale) CountdownFX.start();
+    });
+
+    // GM app-ból távolról állítható hangerő a feltöltött (nem beépített) hangokra
+    db.ref('activityControl/customVolume').on('value', snap => {
+      const v = snap.val();
+      if (typeof v === 'number') AudioLibrary.setCustomVolume(v);
+    });
+
+    // "Új játék" jelzés a GM App-ból - saját intro animáció + hang lejátszása
+    let lastNewGameSignal = null;
+    const newGameAttachedAt = Date.now();
+    db.ref('activityControl/newGameSignal').on('value', snap => {
+      const v = snap.val();
+      if (v == null) return;
+      if (v === lastNewGameSignal) return;
+      const isStale = lastNewGameSignal === null && typeof v === 'number' && v < newGameAttachedAt;
+      lastNewGameSignal = v;
+      if (!isStale) { pushLog('🆕 Új játék indult - session nullázva'); IntroKit.play(() => AudioLibrary.resetAllPlayed()); }
+    });
+  } catch (e) {
+    pushLog(`⚠️ Firebase init hiba: ${e.message || e}`);
+    console.error('Firebase init hiba:', e);
+    document.getElementById('fb-status').className = 'error';
+  }
+}
+
+// Az időzítő számának/gyűrűjének/hangjának egy helyi "tickje" - ezt hívja
+// meg pontosan 1000ms-enként a helyi setInterval, sosem közvetlenül a
+// Firebase-üzenet érkezése (lásd fentebb a localTickInterval-nál).
+function renderTimerTick(left, total) {
+  const numEl = document.getElementById('timer-num');
+  numEl.textContent = left;
+  if (left !== lastTimeLeft) {
+    numEl.classList.remove('tick'); void numEl.offsetWidth; numEl.classList.add('tick');
+    if (lastTimeLeft != null) {   // az induló értéken (timer-start hang már szólt) ne duplázzunk
+      if (left <= 3 && left > 0) soundBeep();
+      else if (left <= 10) soundTickFast();
+      else soundTickNormal();
+    }
+  }
+  numEl.classList.toggle('urgent', left <= 5);
+
+  const ring = document.getElementById('ring-fg');
+  document.querySelector('.timer-ring').classList.toggle('heartbeat', left <= 5 && left > 0);
+  const frac = Math.max(0, Math.min(1, left / total));
+  ring.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - frac);
+  let color = '#2ECC71', glow = 'rgba(46,204,113,.6)';
+  if (frac <= 0.5) { color = '#1ec8ff'; glow = 'rgba(30,200,255,.6)'; }
+  if (frac <= 0.25){ color = '#FF5252'; glow = 'rgba(255,82,82,.6)'; }
+  ring.style.setProperty('--ring-color', color);
+  ring.style.setProperty('--ring-glow', glow);
+
+  // Rajzolás módban a rajzfelület saját időzítő-kijelzőjét is ugyanez az
+  // 1 mp-es helyi ütem hajtja - enélkül csak egy statikus szám látszott.
+  if (DrawLayer.isOpen()) DrawLayer.setTimer(left);
+
+  lastTimeLeft = left;
+}
+
+function renderScoreboardState(data) {
+  DisplaySwitch.onGameState(data);   // ponttábla ↔ rajzréteg váltás vezérlése
+  const { status, word, points, timeLeft, totalTime, mode, categoryId } = data;
+  const catId = categoryId || '';
+  if (catId) currentCategoryId = catId;
+  const overlay = document.getElementById('game-overlay');
+  const timerBox = document.getElementById('gv-timer');
+  const resultBox = document.getElementById('gv-result');
+
+  if (status === 'running') {
+    currentResult = null;
+    resultConsumed = false;
+    if (autoNextTimer) { clearTimeout(autoNextTimer); autoNextTimer = null; }
+    if (autoDismissTimer) { clearTimeout(autoDismissTimer); autoDismissTimer = null; }
+    closeTurn();   // ha látszik a "Soron következik" overlay, az időzítő indulásakor tűnjön el
+    closeRoundBanner(); // ha látszik az "Új kör" banner, az is tűnjön el
+    overlay.classList.add('show');
+    timerBox.style.display = 'flex';
+    resultBox.classList.remove('show');
+
+    const total = totalTime || 60;
+    const left  = (timeLeft != null) ? timeLeft : 0;
+
+    // Frissen indult a kör VAGY a beérkező időtartam eltér attól, amivel
+    // épp számolunk (pl. elavult/korábbi Firebase-adatot olvastunk be elsőként,
+    // mielőtt a valódi friss push megérkezett volna - ez magától korrigálódik).
+    const isFreshRound = (lastGameStatus !== 'running');
+    const totalMismatch = (total !== localTotalValue);
+    if (isFreshRound || totalMismatch) {
+      if (isFreshRound) { robberyEpoch++; soundTimerStart(); AudioLibrary.stopEvent(); AudioLibrary.playLoopingPool(catId, 'feladatok'); }
+      stopLocalTimerTick();
+      localTotalValue = total;
+      localLeftValue = left;
+      renderTimerTick(localLeftValue, localTotalValue);
+      localTickInterval = setInterval(() => {
+        const wasZero = localLeftValue <= 0;
+        localLeftValue = Math.max(0, localLeftValue - 1);
+        renderTimerTick(localLeftValue, localTotalValue);
+        // A "feladatok" hangeffekt csak addig szóljon, amíg az óra ketyeg -
+        // ne várjunk meg a solved/timeout Firebase-push-ra, ami hálózati
+        // késés miatt pár másodpercet csúszhat a vizuális 0 után.
+        if (localLeftValue === 0 && !wasZero) AudioLibrary.stopAmbient();
+      }, 1000);
+    }
+    // A konzol többé nem küld másodpercenkénti frissítést - a kivetítő
+    // teljesen önállóan, helyben számol a "total" értéktől lefelé.
+
+  } else if (status === 'solved' || status === 'timeout') {
+    stopLocalTimerTick();
+    // Ha ezt az eredményt már elrejtettem érintéssel, ne jelenjen meg újra
+    if (resultConsumed && lastGameStatus === status) {
+      return;
+    }
+    resultConsumed = false;
+
+    overlay.classList.add('show');
+    timerBox.style.display = 'none';
+    resultBox.classList.add('show');
+
+    const solved = status === 'solved';
+    // Ha lejárt az idő ÉS volt rablás-jelentkező, a helyes választ NEM szabad
+    // megmutatni - a rablóknak is esélyt kell adni, hogy önerőből kitalálják.
+    const robberyPending = !solved && robberyQueue.length > 0;
+    resultBox.className = 'show ' + (solved ? 'gv-solved' : 'gv-timeout');
+    document.getElementById('gv-icon').textContent = solved ? '✅' : '⏱️';
+    document.getElementById('gv-word').textContent = robberyPending ? '' : (word || '');
+    const pts = (points != null && !robberyPending) ? `${points} pontos` : '';
+    document.getElementById('gv-points').textContent = pts;
+
+    // Eltárolom a jelenlegi eredményt az érintéses pont-hozzáadáshoz
+    currentResult = { status, word: word || '', points: (points != null ? points : null) };
+
+    // Hang csak állapotváltáskor + 10 mp-es automatikus "kattintás" indítása
+    if (lastGameStatus !== status) {
+      AudioLibrary.stopAmbient();
+      const slot = solved ? 'solved' : 'timeout';
+      if (window.customSoundMode === 'instead') {
+        AudioLibrary.playEvent(catId, slot).then(played => { if (!played) { if (solved) soundCheer(); else soundBuzzer(); } });
+      } else {
+        if (solved) soundCheer(); else soundBuzzer();
+        AudioLibrary.playEvent(catId, slot);
+      }
+      // 10 másodperc múlva a scoreboard magától "kattint": elrejti az eredményt,
+      // hozzáadja a pontot a csapathoz, majd indítja az 5 mp-es következő-csapat folyamatot.
+      if (autoDismissTimer) clearTimeout(autoDismissTimer);
+      autoDismissTimer = setTimeout(() => {
+        autoDismissTimer = null;
+        dismissGameResult();
+      }, 10000);
+    }
+    lastTimeLeft = null;
+
+  } else {
+    // idle / ismeretlen
+    stopLocalTimerTick();
+    hideGameOverlay();
+    currentResult = null;
+    resultConsumed = false;
+    if (autoDismissTimer) { clearTimeout(autoDismissTimer); autoDismissTimer = null; }
+    lastTimeLeft = null;
+    if (lastGameStatus !== status) { AudioLibrary.stopEvent(); AudioLibrary.playLoopingPool(catId, 'idle'); }
+  }
+
+  lastGameStatus = status;
+  renderRobbery();
+}
+
+function hideGameOverlay() {
+  const overlay = document.getElementById('game-overlay');
+  overlay.classList.remove('show');
+  document.getElementById('gv-result').classList.remove('show');
+}
+
+/* ── ÉRINTÉS AZ EREDMÉNY-KIJELZŐN ──────────────────
+   a) elrejti a kijelzést (csak lokálisan, NEM ír Firebase-be)
+   b) ha "solved" volt → a pontot a SORON LÉVŐ csapathoz adja
+   c) a soron lévő csapat NEM vált — azt a ▶ gombbal léptetjük
+─────────────────────────────────────────────────── */
+function dismissGameResult() {
+  // Csak akkor reagálunk, ha épp eredmény (solved/timeout) látszik
+  if (!currentResult) return;
+
+  // Ha kézzel koppintunk, töröljük a 10 mp-es automatikus időzítőt
+  if (autoDismissTimer) { clearTimeout(autoDismissTimer); autoDismissTimer = null; }
+
+  const wasSolved = currentResult.status === 'solved';
+  const pts       = currentResult.points;
+
+  // a) lokális elrejtés (NEM ír Firebase-be)
+  hideGameOverlay();
+  resultConsumed = true;
+
+  // b) pont a soron lévő csapatnak.
+  //    solved + valódi pontérték → hozzáadjuk.
+  //    timeout vagy null/0 pont → a program kedvéért "0 pont" az aktuális csapatnak
+  //    (vizuálisan nem változtat semmit, csak a folyamat konzisztenciája miatt).
+  if (wasSolved && pts != null && pts !== 0) {
+    awardPointsToCurrentTeam(pts);
+  } else {
+    awardPointsToCurrentTeam(0);
+  }
+
+  currentResult = null;
+
+  // c) 5 másodperc múlva automatikusan a következő csapat kijelzése
+  if (autoNextTimer) clearTimeout(autoNextTimer);
+  autoNextTimer = setTimeout(() => {
+    autoNextTimer = null;
+    nextTeam();
+  }, 5000);
+}
+
+// A "soron lévő" csapat = teams[turnIndex]. Ha még nincs léptetve (turnIndex < 0),
+// az 1. csapatra esik vissza, és felhozza a vezérlőt, hogy látható legyen kinek ment.
+function awardPointsToCurrentTeam(amount) {
+  if (!teams.length) return;
+  let idx = turnIndex;
+  if (idx < 0 || idx >= teams.length) idx = 0;
+  const team = teams[idx];
+  if (!team) return;
+  applyScore(team.id, amount);
+}
+
+// Az érintés-kezelőt a game-overlay-re kötjük (kattintás + touch egyaránt)
+(function bindGameOverlayTap() {
+  const ov = document.getElementById('game-overlay');
+  if (!ov) return;
+  // Csak akkor reagáljon, ha eredmény látszik (running alatt ne kapcsolja ki a
+  // számlálót), ÉS ne rablás közben (azt a rablás-logika saját maga zárja le).
+  const handler = (e) => {
+    if (currentResult && !robberyActive) {
+      e.preventDefault();
+      dismissGameResult();
+    }
+  };
+  ov.addEventListener('click', handler);
+  ov.addEventListener('touchend', handler, { passive: false });
+})();
+
+// Az időzítő hangjai (áthelyezve a konzolról a kivetítőre 2026-07-15-én) ---
+function soundTimerStart() {
+  initAudio();
+  [[440,0],[550,0.1],[660,0.2],[880,0.32]].forEach(([freq, delay]) => {
+    playTone(freq, 'square', 0.18, 0.15, delay);
+  });
+  playTone(880, 'sine', 0.35, 0.22, 0.32);
+}
+function soundTickNormal() {
+  initAudio();
+  playTone(1200, 'square', 0.04, 0.10, 0);
+}
+function soundTickFast() {
+  initAudio();
+  playTone(1400, 'square', 0.04, 0.18, 0);
+  playTone(700, 'sine', 0.03, 0.08, 0);
+}
+function soundBeep() {
+  initAudio();
+  playTone(880, 'sine', 0.15, 0.3, 0);
+}
+/* ═══════════════════════════════════════════════════
+   RAJZRÉTEG  (a rajzlap logikája, a kivetítőbe ágyazva)
+   ═══════════════════════════════════════════════════ */
+const DrawLayer = (() => {
+  const layer   = document.getElementById('draw-layer');
+  const canvas  = document.getElementById('dl-canvas');
+  const ctx     = canvas.getContext('2d');
+  const penBtn  = document.getElementById('dl-pen');
+  const quickToolBtn = document.getElementById('dl-quick-tool');
+  const eraserCursor = document.getElementById('dl-eraser-cursor');
+  const clrBtn  = document.getElementById('dl-clear');
+  const sRange  = document.getElementById('dl-size-range');
+  const sVal    = document.getElementById('dl-size-val');
+  const dot     = document.getElementById('dl-dot');
+  const toolbar = document.getElementById('dl-toolbar');
+  const hint    = document.getElementById('dl-hint');
+  const backBtn = document.getElementById('dl-back');
+  const undoBtn = document.getElementById('dl-undo');
+  const redoBtn = document.getElementById('dl-redo');
+  const showToolsBtn = document.getElementById('dl-show-tools');
+  const timerBox= document.getElementById('dl-timer');
+  const timerNum= document.getElementById('dl-timer-num');
+  const readyOv = document.getElementById('dl-ready');
+  const readyTxt= document.getElementById('dl-ready-text');
+  const colorsEl = document.getElementById('dl-colors');
+  const colorBtns = colorsEl ? Array.from(colorsEl.querySelectorAll('.dl-color')) : [];
+
+  let penColor = '#14151a';   // az utoljára kiválasztott toll-szín
+  // Külön alapméret tollra és radírra (a radír alapmérete 10-ről 20-ra nőtt,
+  // hogy könnyebb legyen nagyobb felületeket gyorsan törölni)
+  const sizes = { pen: 1, eraser: 20 };
+  let erasing = false, hasDrawn = false, penDetected = false;
+  let drawing = false, pts = [], activeId = null;
+  let locked = false;            // amíg az időzítő el nem indul, nem lehet rajzolni
+
+  // Visszavonás: minden vonás KEZDETE előtt elmentjük a vászon aktuális
+  // állapotát - max 20 lépés, hogy ne fogyassza a memóriát feleslegesen.
+  const UNDO_MAX = 20;
+  let undoStack = [];
+  let redoStack = [];
+  function pushUndoSnapshot() {
+    try {
+      undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      if (undoStack.length > UNDO_MAX) undoStack.shift();
+      redoStack = [];   // új vonás után a korábbi "újra" előzmény érvénytelen
+    } catch (_) {}
+  }
+  function undo() {
+    if (!undoStack.length) return;
+    try { redoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height)); } catch (_) {}
+    const snap = undoStack.pop();
+    ctx.putImageData(snap, 0, 0);
+    if (!undoStack.length) { hasDrawn = false; hint.classList.remove('gone'); }
+  }
+  function redo() {
+    if (!redoStack.length) return;
+    try { undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height)); } catch (_) {}
+    const snap = redoStack.pop();
+    ctx.putImageData(snap, 0, 0);
+    hasDrawn = true; hint.classList.add('gone');
+  }
+
+  function curSize() { return erasing ? sizes.eraser : sizes.pen; }
+
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = window.innerWidth, h = window.innerHeight;
+    let snap = null;
+    if (canvas.width > 0 && canvas.height > 0) {
+      snap = document.createElement('canvas');
+      snap.width = canvas.width; snap.height = canvas.height;
+      snap.getContext('2d').drawImage(canvas, 0, 0);
+    }
+    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (snap) ctx.drawImage(snap, 0, 0, snap.width, snap.height, 0, 0, w, h);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function syncSizeUI() {
+    const v = curSize();
+    sRange.value = v; sVal.textContent = v;
+    const d = Math.max(3, Math.min(26, v));
+    dot.style.width = d + 'px'; dot.style.height = d + 'px';
+    dot.style.background = erasing ? '' : penColor;
+  }
+  function setEraser(on) {
+    erasing = on;
+    penBtn.classList.toggle('active', !on);
+    toolbar.classList.toggle('erasing', on);
+    quickToolBtn.classList.toggle('erasing', on);
+    if (colorsEl) colorsEl.classList.toggle('hidden-erasing', on);
+    canvas.style.cursor = on ? 'cell' : 'crosshair';
+    syncSizeUI();
+  }
+  penBtn.addEventListener('click', () => setEraser(false));
+  quickToolBtn.addEventListener('click', () => setEraser(!erasing));
+  colorBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      penColor = btn.getAttribute('data-color') || penColor;
+      colorBtns.forEach(b => b.classList.toggle('active', b === btn));
+      setEraser(false);   // színválasztás automatikusan visszavált tollra
+    });
+  });
+  sRange.addEventListener('input', () => {
+    sizes[erasing ? 'eraser' : 'pen'] = parseInt(sRange.value, 10);
+    syncSizeUI();
+  });
+  syncSizeUI();
+
+  // Eszköztár elrejtése rajzolás közben / visszahozása a pici gombbal
+  function hideTools() { layer.classList.add('tools-hidden'); }
+  function showTools() { layer.classList.remove('tools-hidden'); }
+  showToolsBtn.addEventListener('click', showTools);
+
+  function clear() {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    hasDrawn = false; hint.classList.remove('gone');
+    undoStack = []; redoStack = [];
+  }
+  clrBtn.addEventListener('click', clear);
+  undoBtn.addEventListener('click', undo);
+  redoBtn.addEventListener('click', redo);
+
+  function posOf(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  function widthOf(e) {
+    const base = curSize();
+    if (erasing) return base;
+    if (e.pointerType === 'pen' && e.pressure > 0) return base * (0.35 + 0.65 * e.pressure);
+    return base;
+  }
+  function styleStroke() {
+    if (erasing) { ctx.globalCompositeOperation = 'destination-out'; ctx.strokeStyle = 'rgba(0,0,0,1)'; ctx.fillStyle = 'rgba(0,0,0,1)'; }
+    else { ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = penColor; ctx.fillStyle = penColor; }
+  }
+  function ignore(e) { return penDetected && e.pointerType === 'touch'; }
+
+  // A radír méretét mutató kör pozicionálása/mérete - a toll hegyénél (érintés
+  // helyén) jelenik meg, hogy radírozás közben látni lehessen mekkora területet
+  // töröl a következő mozdulat.
+  function updateEraserCursor(clientX, clientY, w) {
+    eraserCursor.style.width = w + 'px';
+    eraserCursor.style.height = w + 'px';
+    eraserCursor.style.left = clientX + 'px';
+    eraserCursor.style.top = clientY + 'px';
+  }
+
+  function startStroke(e) {
+    if (locked) return;                       // időzítő még nem indult → nincs rajz
+    if (e.pointerType === 'pen') penDetected = true;
+    if (drawing || ignore(e)) return;
+    pushUndoSnapshot();
+    drawing = true; activeId = e.pointerId;
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    if (!hasDrawn) { hasDrawn = true; hint.classList.add('gone'); }
+    hideTools();                              // rajzolás közben eltűnik az eszköztár + ✕
+    const p = posOf(e); p.w = widthOf(e); pts = [p];
+    styleStroke();
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.w / 2, 0, Math.PI * 2); ctx.fill();
+    if (erasing) { updateEraserCursor(e.clientX, e.clientY, p.w); eraserCursor.classList.add('show'); }
+  }
+  function extendStroke(e) {
+    if (!drawing || e.pointerId !== activeId) return;
+    const events = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents() : [e];
+    styleStroke();
+    for (const ev of events) {
+      const p = posOf(ev); p.w = widthOf(ev); pts.push(p);
+      const n = pts.length; ctx.lineWidth = p.w; ctx.beginPath();
+      if (n < 3) { ctx.moveTo(pts[n - 2].x, pts[n - 2].y); ctx.lineTo(p.x, p.y); }
+      else {
+        const p0 = pts[n - 3], p1 = pts[n - 2], p2 = pts[n - 1];
+        const m1 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+        const m2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+        ctx.moveTo(m1.x, m1.y); ctx.quadraticCurveTo(p1.x, p1.y, m2.x, m2.y);
+      }
+      ctx.stroke();
+      if (erasing) updateEraserCursor(ev.clientX, ev.clientY, p.w);
+    }
+  }
+  function endStroke(e) {
+    if (e.pointerId !== activeId) return;
+    drawing = false; activeId = null; pts = []; ctx.globalCompositeOperation = 'source-over';
+    eraserCursor.classList.remove('show');
+  }
+  canvas.addEventListener('pointerdown', startStroke);
+  canvas.addEventListener('pointermove', extendStroke);
+  canvas.addEventListener('pointerup', endStroke);
+  canvas.addEventListener('pointercancel', endStroke);
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  backBtn.addEventListener('click', () => DisplaySwitch.manualBack());
+
+  // locked = true → "Felkészültél?" / 3-2-1 overlay, rajz tiltva
+  function setLocked(on) {
+    locked = on;
+    if (on) { readyOv.classList.add('show'); }
+    else { readyOv.classList.remove('show'); }
+  }
+  function setReadyText(txt, isNum, isTimeout) {
+    if (txt == null) { readyOv.classList.remove('show', 'timeout'); return; }
+    readyOv.classList.add('show');
+    readyOv.classList.toggle('timeout', !!isTimeout);
+    readyTxt.textContent = txt;
+    readyTxt.className = isNum ? 'rdy-num' : 'rdy-text';
+  }
+
+  function open(opts) {
+    opts = opts || {};
+    const wasOpen = layer.classList.contains('open');
+    if (!wasOpen) {
+      penDetected = false;          // friss tenyér-kiszűrés
+      showTools();                  // induláskor látszik az eszköztár
+      layer.classList.add('open');
+      resize();
+    }
+    setLocked(!!opts.locked);
+    if (opts.locked) setReadyText('Felkészültél?', false);
+  }
+  function close() { layer.classList.remove('open'); setLocked(false); }
+  function isOpen() { return layer.classList.contains('open'); }
+
+  function setTimer(seconds) {
+    if (seconds == null) { timerBox.style.display = 'none'; return; }
+    timerBox.style.display = '';
+    timerNum.textContent = seconds;
+    timerBox.classList.toggle('urgent', seconds <= 5 && seconds > 0);
+  }
+
+  return { open, close, clear, undo, redo, isOpen, setTimer, setLocked, setReadyText };
+})();
+
+/* ═══════════════════════════════════════════════════
+   HANGKÖNYVTÁR - kategóriánkénti szituációs zenék.
+   Áthelyezve a konzolról ide (2026-07-16), mert a lejátszás mindig
+   ugyanazon az eszközön kell történjen, ahol a feltöltés is történt
+   (IndexedDB eszközhöz kötött tárolás) - a kivetítő az az eszköz, ami
+   ténylegesen szól a teremben, ezért itt a helye mindkettőnek.
+   Minden hangindítás/hangbefejezés 1 mp-es ki-/beúsztatással jár.
+   ═══════════════════════════════════════════════════ */
+const AudioLibrary = (() => {
+  const DB_NAME = 'reactivity_audio';
+  const DB_VERSION = 1;
+  const STORE = 'tracks';
+  const FADE_MS = 1000;
+
+  let db = null;
+  let currentAmbient = null;
+  let currentAmbientPoolKey = null;
+  // A GM app-ból távolról állítható hangerő a SAJÁT (feltöltött) hangokra -
+  // a beépített szintetizált effektek (soundCheer, soundBuzzer stb.) mindig
+  // max hangerőn szólnak, ez csak a testreszabott mp3-kra vonatkozik.
+  let customVolume = 0.05;
+  function setCustomVolume(v) {
+    customVolume = Math.max(0, Math.min(1, v));
+    if (currentAmbient) currentAmbient.volume = customVolume;
+  }
+
+  const PLAYED_KEY = 'audioLibraryPlayed';
+  function getPlayed() { try { return JSON.parse(localStorage.getItem(PLAYED_KEY)) || {}; } catch { return {}; } }
+  function setPlayed(obj) { try { localStorage.setItem(PLAYED_KEY, JSON.stringify(obj)); } catch {} }
+  function markPlayed(poolKey, trackId) {
+    const played = getPlayed();
+    if (!played[poolKey]) played[poolKey] = [];
+    if (!played[poolKey].includes(trackId)) played[poolKey].push(trackId);
+    setPlayed(played);
+  }
+  function getPlayedIds(poolKey) { return getPlayed()[poolKey] || []; }
+  function resetPlayed(poolKey) { const played = getPlayed(); played[poolKey] = []; setPlayed(played); }
+  // Új játék indításakor a GM App jelzésére - minden hang ismétlésfigyelése
+  // nullázódik, mintha még semmi sem szólt volna egyszer sem.
+  function resetAllPlayed() { setPlayed({}); }
+
+  function openDB() {
+    return new Promise((resolve, reject) => {
+      if (db) return resolve(db);
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = (e) => {
+        const _db = e.target.result;
+        if (!_db.objectStoreNames.contains(STORE)) {
+          const store = _db.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true });
+          store.createIndex('poolKey', 'poolKey', { unique: false });
+        }
+      };
+      req.onsuccess = (e) => { db = e.target.result; resolve(db); };
+      req.onerror = (e) => reject(e);
+    });
+  }
+
+  function poolKey(categoryId, slot) { return `${categoryId}:${slot}`; }
+
+  // A 4 külön mód-kategória ("Mutasd meg!" stb.) egybe lett vonva "feladatok"
+  // néven (2026-07-20) - a korábban ezekhez feltöltött hangok viszont ne
+  // vesszenek el, ezért a "feladatok" pool lekérésekor a régi kulcsok alatt
+  // tárolt fájlokat is összegyűjtjük.
+  const LEGACY_TASK_SLOTS = ['feladatok', 'Mutasd meg!', 'Rajzold le!', 'Írd körül!', 'Szájról olvasás!'];
+
+  async function addTrack(categoryId, slot, file) {
+    const _db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = _db.transaction(STORE, 'readwrite');
+      const req = tx.objectStore(STORE).add({
+        poolKey: poolKey(categoryId, slot), categoryId, slot,
+        name: file.name, blob: file, addedAt: Date.now()
+      });
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = (e) => reject(e);
+    });
+  }
+  async function getTracksForKey(categoryId, slot) {
+    const _db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = _db.transaction(STORE, 'readonly');
+      const req = tx.objectStore(STORE).index('poolKey').getAll(poolKey(categoryId, slot));
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = (e) => reject(e);
+    });
+  }
+  async function getTracks(categoryId, slot) {
+    if (slot === 'feladatok') {
+      const all = await Promise.all(LEGACY_TASK_SLOTS.map(s => getTracksForKey(categoryId, s)));
+      return all.flat();
+    }
+    return getTracksForKey(categoryId, slot);
+  }
+  async function removeTrack(id) {
+    const _db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = _db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = (e) => reject(e);
+    });
+  }
+
+  async function pickUnplayedTrack(categoryId, slot) {
+    const tracks = await getTracks(categoryId, slot);
+    if (tracks.length === 0) return null;
+    const key = poolKey(categoryId, slot);
+    let available = tracks.filter(t => !getPlayedIds(key).includes(t.id));
+    if (available.length === 0) { resetPlayed(key); available = tracks; }
+    const pick = available[Math.floor(Math.random() * available.length)];
+    markPlayed(key, pick.id);
+    return pick;
+  }
+
+  // Fokozatos hangerő-átmenet (1 mp) - requestAnimationFrame-alapú, nem setInterval,
+  // hogy sima legyen az átmenet és ne terhelje feleslegesen a böngészőt.
+  // FONTOS: a rAF-azonosítót magán az audio elemen tároljuk (nem egy közös,
+  // modulszintű változóban) - korábban egyetlen megosztott "fadeRaf" változó
+  // volt, ami azt okozta, hogy ha PÁRHUZAMOSAN futott egy kifakulás (leállítás)
+  // és egy felfakulás (új hang indítása), a második megszakította az elsőt,
+  // MIELŐTT az elérte volna az onDone (pause()) hívást - ezért a "feladatok"
+  // háttérhang néha örökre szólva maradt megoldás/lejárt idő után is.
+  function fadeVolume(audio, from, to, ms, onDone) {
+    const start = performance.now();
+    function step(now) {
+      const t = Math.min(1, (now - start) / ms);
+      audio.volume = from + (to - from) * t;
+      if (t < 1) { audio._fadeRaf = requestAnimationFrame(step); }
+      else { audio._fadeRaf = null; if (onDone) onDone(); }
+    }
+    if (audio._fadeRaf) cancelAnimationFrame(audio._fadeRaf);
+    audio._fadeRaf = requestAnimationFrame(step);
+  }
+
+  // A "feladatok"/"idle" háttérzene a GM App-ból állítható customVolume-on
+  // szól (alapból 5%) - a sikeres/sikertelen megoldás hangja viszont MINDIG
+  // teljes hangerőn indul, ugyanúgy, mint a beépített effektek.
+  function playBlob(blob, { fadeIn = true, volume = customVolume } = {}) {
+    try {
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      if (fadeIn) {
+        audio.volume = 0;
+        audio.play().then(() => fadeVolume(audio, 0, volume, FADE_MS)).catch(() => {});
+      } else {
+        audio.volume = volume;
+        audio.play().catch(() => {});
+      }
+      audio.addEventListener('ended', () => URL.revokeObjectURL(url));
+      return audio;
+    } catch (e) { return null; }
+  }
+
+  // A sikeres/sikertelen megoldás hangja NEM fakul be (azonnal teljes
+  // hangerőn indul), de max 10 mp-ig tarthat, VAGY addig, amíg a következő
+  // feladvány el nem indul (amelyik előbb bekövetkezik) - onnantól 1 mp
+  // alatt elhalkul, nem vágjuk le csattanva.
+  const EVENT_MAX_MS = 10000;
+  let currentEventAudio = null;
+  let eventStopTimer = null;
+
+  function stopEvent() {
+    if (eventStopTimer) { clearTimeout(eventStopTimer); eventStopTimer = null; }
+    if (!currentEventAudio) return;
+    const a = currentEventAudio;
+    currentEventAudio = null;
+    fadeVolume(a, a.volume, 0, FADE_MS, () => { try { a.pause(); } catch (e) {} });
+  }
+
+  async function playEvent(categoryId, slot) {
+    try {
+      const track = await pickUnplayedTrack(categoryId, slot);
+      if (!track) return false;
+      stopEvent();
+      const audio = playBlob(track.blob, { fadeIn: false, volume: 1 });
+      if (!audio) return false;
+      currentEventAudio = audio;
+      audio.addEventListener('ended', () => { if (currentEventAudio === audio) currentEventAudio = null; });
+      eventStopTimer = setTimeout(() => { if (currentEventAudio === audio) stopEvent(); }, EVENT_MAX_MS);
+      pushLog(`🎵 Hang indult: ${categoryId || '?'} / ${slot} (${track.name})`);
+      return true;
+    } catch (e) { pushLog(`⚠️ Hangindítási hiba (${slot}): ${e.message || e}`); return false; }
+  }
+
+  async function playLoopingPool(categoryId, slot) {
+    stopAmbient();
+    currentAmbientPoolKey = poolKey(categoryId, slot);
+    await _playNextInPool(categoryId, slot);
+  }
+  async function _playNextInPool(categoryId, slot) {
+    const myKey = poolKey(categoryId, slot);
+    try {
+      const track = await pickUnplayedTrack(categoryId, slot);
+      // Amíg a fenti (aszinkron, IndexedDB-s) lekérdezésre vártunk, elindulhatott
+      // egy ÚJABB kör/helyzet (currentAmbientPoolKey már mást jelöl) - ha ez
+      // történt, ez a válasz elavult, ne indítsuk el, mert vagy rossz hangot
+      // játszana le, vagy elnyomná a közben már elindult helyeset (ez okozta,
+      // hogy néha "nem indult el" a feladat-zene - valójában elindult, csak
+      // egy elavult hívás rögtön felül is írta/leállította).
+      if (currentAmbientPoolKey !== myKey) { pushLog(`⏭️ Elavult háttérzene-hívás eldobva: ${categoryId || '?'} / ${slot}`); return; }
+      if (!track) { pushLog(`🔇 Nincs feltöltött hang: ${categoryId || '?'} / ${slot}`); return; }
+      const audio = playBlob(track.blob);
+      if (!audio) return;
+      currentAmbient = audio;
+      audio.addEventListener('ended', () => {
+        if (currentAmbientPoolKey === myKey) _playNextInPool(categoryId, slot);
+      });
+      pushLog(`🎶 Háttérzene indult: ${categoryId || '?'} / ${slot} (${track.name})`);
+    } catch (e) { pushLog(`⚠️ Háttérzene hiba (${slot}): ${e.message || e}`); }
+  }
+
+  // Leállításkor 1 mp alatt elhalkul, csak utána áll meg ténylegesen -
+  // nincs éles, kellemetlen "levágás" a helyzetváltásoknál.
+  function stopAmbient() {
+    currentAmbientPoolKey = null;
+    if (!currentAmbient) return;
+    const a = currentAmbient;
+    currentAmbient = null;
+    fadeVolume(a, a.volume, 0, FADE_MS, () => { try { a.pause(); } catch (e) {} });
+  }
+
+  return { addTrack, getTracks, removeTrack, playEvent, playLoopingPool, stopAmbient, stopEvent, setCustomVolume, resetAllPlayed };
+})();
+
+/* ===== Intro hang (IndexedDB) + intro overlay - "Új játék" indításakor
+   fut le a GM App jelzésére, minden appon saját animációval. ===== */
+const IntroKit = (() => {
+  const DB = 'reactivity_intro_kivetito', STORE = 'intro';
+  let db = null;
+  function openDB() {
+    return new Promise((res, rej) => {
+      if (db) return res(db);
+      const r = indexedDB.open(DB, 1);
+      r.onupgradeneeded = e => { e.target.result.createObjectStore(STORE); };
+      r.onsuccess = e => { db = e.target.result; res(db); };
+      r.onerror = rej;
+    });
+  }
+  async function save(file) { const d = await openDB(); return new Promise((res, rej) => { const tx = d.transaction(STORE, 'readwrite'); tx.objectStore(STORE).put(file, 'track'); tx.oncomplete = res; tx.onerror = rej; }); }
+  async function load() { const d = await openDB(); return new Promise((res, rej) => { const tx = d.transaction(STORE, 'readonly'); const req = tx.objectStore(STORE).get('track'); req.onsuccess = () => res(req.result || null); req.onerror = rej; }); }
+  async function clear() { const d = await openDB(); return new Promise((res, rej) => { const tx = d.transaction(STORE, 'readwrite'); tx.objectStore(STORE).delete('track'); tx.oncomplete = res; tx.onerror = rej; }); }
+  function play(onDone) {
+    const overlay = document.getElementById('intro-overlay');
+    if (!overlay) { if (onDone) onDone(); return; }
+    overlay.classList.add('show');
+    load().then(blob => { if (blob) { try { new Audio(URL.createObjectURL(blob)).play().catch(() => {}); } catch (e) {} } });
+    setTimeout(() => { overlay.classList.remove('show'); if (onDone) onDone(); }, 2500);
+  }
+  return { save, load, clear, play };
+})();
+
+(function IntroUI() {
+  const panel = document.getElementById('intro-panel');
+  const openBtn = document.getElementById('intro-open-btn');
+  const closeBtn = document.getElementById('intro-close-btn');
+  const fileInput = document.getElementById('intro-file-input');
+  const nameEl = document.getElementById('intro-name');
+  if (!panel || !openBtn) return;
+  async function refresh() {
+    const blob = await IntroKit.load();
+    nameEl.textContent = blob ? '🎵 Intro hang beállítva' : 'Nincs intro-hang beállítva';
+  }
+  openBtn.addEventListener('click', () => { panel.classList.add('open'); refresh(); });
+  closeBtn.addEventListener('click', () => panel.classList.remove('open'));
+  fileInput.addEventListener('change', async () => {
+    if (fileInput.files && fileInput.files[0]) { await IntroKit.save(fileInput.files[0]); refresh(); }
+    fileInput.value = '';
+  });
+})();
+
+/* Hangkönyvtár - kis panel a kivetítőn, ahol a szituációs zenéket fel lehet
+   tölteni (ugyanazon az eszközön, ahol a lejátszás is történik). */
+(function AudioLibraryUI() {
+  const AL_CATEGORIES = [
+    { id: 'altalanos', name: 'Általános' },
+    { id: 'gyerek', name: 'Gyerekzsúr' },
+    { id: 'ceges', name: 'Céges rendezvény' },
+    { id: 'tizennyolcPlus', name: '18+' },
+    { id: 'sport', name: 'Sport & Mozgás' },
+    { id: 'film', name: 'Film & Sorozat' }
+  ];
+  const panel = document.getElementById('al-panel');
+  const openBtn = document.getElementById('al-open-btn');
+  const closeBtn = document.getElementById('al-close-btn');
+  const catSel = document.getElementById('al-cat-select');
+  const slotSel = document.getElementById('al-slot-select');
+  const fileInput = document.getElementById('al-file-input');
+  const listEl = document.getElementById('al-track-list');
+  const modeAfterBtn = document.getElementById('al-mode-after');
+  const modeInsteadBtn = document.getElementById('al-mode-instead');
+  if (!panel || !openBtn) return;
+
+  catSel.innerHTML = AL_CATEGORIES.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+  window.customSoundMode = localStorage.getItem('customSoundMode') || 'after';
+  function syncModeButtons() {
+    modeAfterBtn.classList.toggle('active', window.customSoundMode === 'after');
+    modeInsteadBtn.classList.toggle('active', window.customSoundMode === 'instead');
+  }
+  syncModeButtons();
+  modeAfterBtn.addEventListener('click', () => { window.customSoundMode = 'after'; localStorage.setItem('customSoundMode', 'after'); syncModeButtons(); });
+  modeInsteadBtn.addEventListener('click', () => { window.customSoundMode = 'instead'; localStorage.setItem('customSoundMode', 'instead'); syncModeButtons(); });
+
+  async function refreshList() {
+    try {
+      const tracks = await AudioLibrary.getTracks(catSel.value, slotSel.value);
+      if (!tracks.length) { listEl.innerHTML = '<div class="al-empty">Még nincs feltöltött hang ehhez a helyzethez.</div>'; return; }
+      listEl.innerHTML = tracks.map(t => `
+        <div class="al-track"><span class="name">🎵 ${t.name}</span><button class="del" data-id="${t.id}">✕</button></div>
+      `).join('');
+      listEl.querySelectorAll('.del').forEach(btn => {
+        btn.addEventListener('click', async () => { await AudioLibrary.removeTrack(Number(btn.dataset.id)); refreshList(); });
+      });
+    } catch (e) { listEl.innerHTML = '<div class="al-empty">Hiba a betöltéskor.</div>'; }
+  }
+
+  openBtn.addEventListener('click', () => { panel.classList.add('open'); refreshList(); });
+  closeBtn.addEventListener('click', () => panel.classList.remove('open'));
+  catSel.addEventListener('change', refreshList);
+  slotSel.addEventListener('change', refreshList);
+  fileInput.addEventListener('change', async () => {
+    if (!fileInput.files || !fileInput.files.length) return;
+    for (const file of fileInput.files) { try { await AudioLibrary.addTrack(catSel.value, slotSel.value, file); } catch (e) {} }
+    fileInput.value = '';
+    refreshList();
+  });
+})();
+
+/* 3-2-1 visszaszámláló effekt (ponttáblán + rajztáblán) */
+const CountdownFX = (() => {
+  const ov  = document.getElementById('countdown-overlay');
+  const num = document.getElementById('cd-num');
+  let iv = null;
+  function show(n) {
+    ov.classList.add('show'); num.textContent = n;
+    num.style.animation = 'none'; void num.offsetWidth; num.style.animation = '';
+    soundBeep();   // 3-2-1 hang - áthelyezve a konzolról ide, hogy egy helyen szóljon minden hang
+    // Nem szabad DrawLayer.isOpen()-re feltételezni - két külön Firebase-figyelő
+    // (activityGame és activityGame/startSignal) sorrendje nem garantált, így a
+    // rajzréteg olykor csak a "3" UTÁN nyílt meg, és lemaradt az első szám. A
+    // szöveg beállítása ártalmatlan akkor is, ha a réteg még nincs nyitva (rejtve
+    // marad, amíg meg nem nyílik), így mindig a friss értéket mutatja majd.
+    DrawLayer.setReadyText(String(n), true);
+  }
+  function start() {
+    stop();
+    let n = 3; show(n);
+    iv = setInterval(() => { n--; if (n >= 1) show(n); else stop(); }, 800);
+  }
+  function stop() { if (iv) { clearInterval(iv); iv = null; } ov.classList.remove('show'); }
+  return { start, stop };
+})();
+
+/* ═══════════════════════════════════════════════════
+   KAPCSOLÓ: ponttábla ↔ rajzréteg
+   ═══════════════════════════════════════════════════ */
+const DisplaySwitch = (() => {
+  const DRAW_MODE = 'Rajzold le!';
+  const RETURN_MS = 3000;
+  let returnTimer = null;
+  let lastStatus = null;
+
+  function isDrawMode(m) { return (m || '').trim() === DRAW_MODE; }
+  function clearReturn() { if (returnTimer) { clearTimeout(returnTimer); returnTimer = null; } }
+  function scheduleReturn(ms) {
+    clearReturn();
+    returnTimer = setTimeout(() => { returnTimer = null; toScoreboard(); }, ms);
+  }
+  function toScoreboard() { DrawLayer.close(); DrawLayer.clear(); DrawLayer.setTimer(null); DrawLayer.setReadyText(null); }
+
+  function onGameState(data) {
+    const status   = (data && data.status) || 'idle';
+    const mode     = (data && data.mode) || '';
+    const timeLeft = (data && data.timeLeft != null) ? data.timeLeft : null;
+
+    DrawLayer.setTimer(status === 'running' ? timeLeft : null);
+
+    if (status === 'running') {
+      clearReturn();
+      CountdownFX.stop();
+      if (isDrawMode(mode)) {
+        DrawLayer.open({ locked: false });   // időzítő elindult → rajzolás engedélyezve
+      } else if (DrawLayer.isOpen()) {
+        toScoreboard();   // nem rajzolós feladat - a rajzréteg NE maradjon nyitva
+      }
+    } else if (status === 'ready') {
+      clearReturn();
+      if (isDrawMode(mode)) {
+        const fresh = (lastStatus !== 'running' && lastStatus !== 'ready');
+        if (fresh) DrawLayer.clear();
+        DrawLayer.open({ locked: true });    // megjelenik a tábla "Felkészültél?"-lel, de zárva
+      } else if (DrawLayer.isOpen()) {
+        toScoreboard();   // nem rajzolós feladat - a rajzréteg NE maradjon nyitva
+      }
+    } else if (status === 'solved') {
+      CountdownFX.stop();
+      if (DrawLayer.isOpen()) toScoreboard();   // megoldva → a rajzfelület AZONNAL eltűnik
+    } else if (status === 'timeout') {
+      CountdownFX.stop();
+      if (DrawLayer.isOpen()) {
+        DrawLayer.setReadyText('Lejárt az idő!', false, true);
+        scheduleReturn(RETURN_MS);
+      }
+    } else { // idle / ismeretlen
+      CountdownFX.stop();
+      if (DrawLayer.isOpen()) scheduleReturn(RETURN_MS);
+    }
+    lastStatus = status;
+  }
+
+  // Érintés a ponttáblán (sima állapotban) → szabad rajzolás (zár nélkül)
+  function onBoardTouch() {
+    if (DrawLayer.isOpen()) return;
+    clearReturn();
+    DrawLayer.clear();
+    DrawLayer.open({ locked: false });
+  }
+
+  // ✕ a rajzrétegen → azonnal vissza
+  function manualBack() { clearReturn(); CountdownFX.stop(); toScoreboard(); }
+
+  return { onGameState, onBoardTouch, manualBack };
+})();
+
+/* Érintés-elkapó: egyujjas, gyors koppintás → rajz.
+   Többujjas / hosszú nyomás átmegy a ponttábla vezérlő-előhívásához. */
+(function bindDrawTrigger() {
+  const trig = document.getElementById('draw-trigger');
+  if (!trig) return;
+  let downTime = 0, startX = 0, startY = 0, pointers = 0, candidate = false;
+  trig.addEventListener('pointerdown', e => {
+    pointers++;
+    if (pointers > 1) { candidate = false; return; }   // többujjas → vezérlő-gesztus
+    candidate = true; downTime = Date.now(); startX = e.clientX; startY = e.clientY;
+  });
+  trig.addEventListener('pointermove', e => {
+    if (candidate && Math.hypot(e.clientX - startX, e.clientY - startY) > 16) candidate = false;
+  });
+  trig.addEventListener('pointerup', () => {
+    pointers = Math.max(0, pointers - 1);
+    if (!candidate) return;
+    candidate = false;
+    if (Date.now() - downTime < 550) DisplaySwitch.onBoardTouch();  // gyors egyujjas koppintás
+  });
+  trig.addEventListener('pointercancel', () => { pointers = Math.max(0, pointers - 1); candidate = false; });
+})();
+
+/* A kivetítő képernyője ne aludjon el */
+(function keepScreenAwake() {
+  let wl = null;
+  async function req() { try { if ('wakeLock' in navigator) wl = await navigator.wakeLock.request('screen'); } catch (_) {} }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') req(); });
+  document.addEventListener('pointerdown', req, { once: true });
+  req();
+})();
+
+/* ───── Halvány háttérkép kezelése (localStorage) ───── */
+const BG_KEY = 'kivetito_bg';
+function applyBg(dataUrl) {
+  const el = document.getElementById('bg-image');
+  if (dataUrl) { el.style.backgroundImage = 'url("' + dataUrl + '")'; el.classList.add('on'); }
+  else { el.style.backgroundImage = ''; el.classList.remove('on'); }
+}
+function loadBgImage() {
+  try {
+    const d = localStorage.getItem(BG_KEY);
+    if (d) { applyBg(d); const n = document.getElementById('bg-name'); if (n) n.textContent = 'Beállítva ✓'; }
+  } catch (_) {}
+}
+function clearBgImage() {
+  try { localStorage.removeItem(BG_KEY); } catch (_) {}
+  applyBg(null);
+  const n = document.getElementById('bg-name'); if (n) n.textContent = '';
+}
+
+/* ===== Rabló App QR kód ===== */
+const ROBLO_URL_KEY = 'robloAppUrl';
+function defaultRobloUrl() {
+  // A Rabló App önálló GitHub Pages-en él, hogy bármelyik telefon elérje,
+  // függetlenül attól, honnan fut éppen ez a kivetítő oldal.
+  return 'https://tpatrikjanos-create.github.io/rabloapp/';
+}
+function renderRobloQR() {
+  const url = document.getElementById('qr-url-input').value.trim() || defaultRobloUrl();
+  const wrap = document.getElementById('qr-canvas-wrap');
+  try {
+    const qr = qrcode(0, 'M');
+    qr.addData(url);
+    qr.make();
+    wrap.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2 });
+  } catch (e) { wrap.innerHTML = '<div style="color:#c00;font-size:12px;padding:10px">Hiba a QR generálásakor.</div>'; }
+}
+function showRobloQR() {
+  const input = document.getElementById('qr-url-input');
+  let saved = '';
+  try { saved = localStorage.getItem(ROBLO_URL_KEY) || ''; } catch (_) {}
+  input.value = saved || defaultRobloUrl();
+  document.getElementById('qr-modal').classList.add('open');
+  renderRobloQR();
+}
+(function bindRobloQR() {
+  const closeBtn = document.getElementById('qr-close-btn');
+  const input = document.getElementById('qr-url-input');
+  if (!closeBtn || !input) return;
+  closeBtn.addEventListener('click', () => document.getElementById('qr-modal').classList.remove('open'));
+  input.addEventListener('input', () => {
+    try { localStorage.setItem(ROBLO_URL_KEY, input.value.trim()); } catch (_) {}
+    renderRobloQR();
+  });
+})();
+(function bindBgPicker() {
+  const inp = document.getElementById('bg-file');
+  if (!inp) return;
+  inp.addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1920;
+        let w = img.width, h = img.height;
+        const scale = Math.min(1, MAX / Math.max(w, h));
+        w = Math.round(w * scale); h = Math.round(h * scale);
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        let dataUrl;
+        try { dataUrl = c.toDataURL('image/jpeg', 0.82); } catch (_) { dataUrl = reader.result; }
+        try { localStorage.setItem(BG_KEY, dataUrl); }
+        catch (err) { alert('A kép túl nagy a tároláshoz — próbálj kisebb felbontású képet.'); return; }
+        applyBg(dataUrl);
+        const n = document.getElementById('bg-name'); if (n) n.textContent = 'Beállítva ✓';
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(f);
+  });
+})();
+window.addEventListener('load', loadBgImage);
+
+// Indítás
+window.addEventListener('load', initFirebase);
+
+</script>
+</body>
+</html>
