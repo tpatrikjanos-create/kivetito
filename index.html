@@ -1026,7 +1026,7 @@ html,body{height:100%;background:var(--bg);color:#fff;font-family:'Nunito',sans-
 
 <!-- Firebase kapcsolat-jelző pont -->
 <div id="fb-status"></div>
-<div style="position:fixed;bottom:6px;right:9px;z-index:45;font-size:10px;color:rgba(255,255,255,.28);pointer-events:none;font-family:'Nunito',sans-serif">v2.10</div>
+<div style="position:fixed;bottom:6px;right:9px;z-index:45;font-size:10px;color:rgba(255,255,255,.28);pointer-events:none;font-family:'Nunito',sans-serif">v2.11</div>
 
 <!-- Hangkönyvtár - diszkrét gomb, csak ide kell feltölteni a szituációs
      zenéket, mert a lejátszás is ezen az eszközön történik. -->
@@ -1271,6 +1271,22 @@ function updateFsBtn() {
   const btn = document.getElementById('fs-btn');
   if (btn) btn.textContent = isFullscreen() ? '✕ Kilépés' : '⛶ Teljes';
 }
+
+// A böngészők csak közvetlen felhasználói gesztusra (kattintás/érintés) engedik
+// meg a teljes képernyős módot - programozottan, betöltéskor nem lehet. Ezért
+// a beállítás oldalon az ELSŐ érintésre (bármi legyen az, egy gombra vagy
+// mezőre kattintás) rögtön belépünk teljes képernyőre, hogy a beállítás
+// oldal is gyakorlatilag azonnal fullscreenben induljon, ne csak a
+// "JÁTÉK KEZDÉSE" gomb megnyomásakor.
+(function fullscreenOnFirstSetupTouch() {
+  const setupEl = document.getElementById('setup');
+  if (!setupEl) return;
+  function onFirstTouch() {
+    if (!isFullscreen()) requestFullscreen();
+    setupEl.removeEventListener('pointerdown', onFirstTouch, true);
+  }
+  setupEl.addEventListener('pointerdown', onFirstTouch, true);
+})();
 
 document.addEventListener('fullscreenchange', updateFsBtn);
 document.addEventListener('webkitfullscreenchange', updateFsBtn);
