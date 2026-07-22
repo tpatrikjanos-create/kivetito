@@ -637,13 +637,14 @@ html,body{height:100%;background:var(--bg);color:#fff;font-family:'Nunito',sans-
 }
 #draw-layer .dl-hint.gone{opacity:0}
 
-/* Visszaszámláló-csip a rajzrétegen (a rajzoló is lássa az időt) */
+/* Visszaszámláló-csip a rajzrétegen (a rajzoló is lássa az időt) - nagy,
+   messziről is jól látható, hogy rajzolás közben se kelljen erőlködni. */
 #draw-layer .dl-timer{
   position:fixed;top:max(14px,env(safe-area-inset-top));left:max(14px,env(safe-area-inset-left));
-  z-index:520;min-width:62px;padding:8px 16px;border-radius:16px;
+  z-index:520;min-width:104px;padding:10px 22px;border-radius:20px;
   background:#14151a;color:#fff;font-family:'Bebas Neue',sans-serif;font-weight:900;
-  font-size:28px;text-align:center;font-variant-numeric:tabular-nums;
-  box-shadow:0 6px 20px rgba(20,21,26,.28)
+  font-size:52px;line-height:1;text-align:center;font-variant-numeric:tabular-nums;
+  box-shadow:0 8px 28px rgba(20,21,26,.35);border:2px solid rgba(255,255,255,.08)
 }
 #draw-layer .dl-timer.urgent{background:#e84040;animation:dl-pulse .5s ease-in-out infinite}
 @keyframes dl-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
@@ -924,7 +925,6 @@ html,body{height:100%;background:var(--bg);color:#fff;font-family:'Nunito',sans-
       <button class="tbb" id="fs-btn" onclick="toggleFullscreen()">⛶ Teljes</button>
       <button class="tbb" onclick="goSetup()">↩ Beállítás</button>
       <button class="tbb red" onclick="doReset()">Nullázás</button>
-      <button class="tbb gold" onclick="showWinner()">🏆 Győztes!</button>
     </div>
   </div>
   <div id="rank-list"></div>
@@ -1026,7 +1026,7 @@ html,body{height:100%;background:var(--bg);color:#fff;font-family:'Nunito',sans-
 
 <!-- Firebase kapcsolat-jelző pont -->
 <div id="fb-status"></div>
-<div style="position:fixed;bottom:6px;right:9px;z-index:45;font-size:10px;color:rgba(255,255,255,.28);pointer-events:none;font-family:'Nunito',sans-serif">v2.11</div>
+<div style="position:fixed;bottom:6px;right:9px;z-index:45;font-size:10px;color:rgba(255,255,255,.28);pointer-events:none;font-family:'Nunito',sans-serif">v2.12</div>
 
 <!-- Hangkönyvtár - diszkrét gomb, csak ide kell feltölteni a szituációs
      zenéket, mert a lejátszás is ezen az eszközön történik. -->
@@ -2024,6 +2024,32 @@ function syncTeamsToFirebase() {
   fbDb.ref('activityTeams').set(payload).catch(() => {});
 }
 
+/* GM App játék-közbeni csapatkezelése (átnevezés/törlés) - pl. ha valaki
+   elment a buli közepén, a GM ki tudja venni a csapatot anélkül, hogy újra
+   kellene indítani az egész játékot. A csapat ID-ját NEM osztjuk újra
+   törléskor, hogy a megmaradt csapatok Rabló App-jai ne cseréljenek
+   véletlenül azonosítót. */
+function applyTeamCommand(cmd) {
+  if (cmd.type === 'rename') {
+    const team = teams.find(t => String(t.id) === String(cmd.teamId));
+    if (!team || !cmd.newName) return;
+    const oldName = team.name;
+    team.name = String(cmd.newName).trim().slice(0, 40) || team.name;
+    renderList(false);
+    syncTeamsToFirebase();
+    pushLog(`✏️ Csapat átnevezve: "${oldName}" → "${team.name}"`);
+  } else if (cmd.type === 'delete') {
+    const idx = teams.findIndex(t => String(t.id) === String(cmd.teamId));
+    if (idx === -1) return;
+    const removed = teams.splice(idx, 1)[0];
+    if (teams.length === 0) { turnIndex = -1; }
+    else if (turnIndex >= teams.length) { turnIndex = teams.length - 1; }
+    renderList(false);
+    syncTeamsToFirebase();
+    pushLog(`🗑️ Csapat törölve: "${removed.name}"`);
+  }
+}
+
 /* A távvezérlőről (soundboard) érkező pont-parancsok fogadása.
    A remote a activityControl/scoreQueue alá push-ol {teamId, delta, ts}-t,
    itt sorban alkalmazzuk applyScore-ral (animáció + hang), majd töröljük. */
@@ -2048,6 +2074,7 @@ function attachScoreCommandListener() {
    megoldotta-e). A kivetítő csak MEGJELENÍTI, amit lát - nem ő dönt.
    ═══════════════════════════════════════════════════ */
 let robberyQueue = [];
+let robberyDisabled = false;   // GM App vészhelyzeti kikapcsolója, ha a Rabló App beragad
 let robberyCurrentIndex = -1;
 let robberyPhase = 'collecting';
 let lastRobberyQueueLen = 0;
@@ -2074,6 +2101,18 @@ function renderRobbery() {
   const liveEl = document.getElementById('robbery-live');
   const listEl = document.getElementById('rb-live-list');
   const bannerEl = document.getElementById('robbery-banner');
+
+  // GM App vészhelyzeti kikapcsolója: amíg aktív, a kivetítő úgy viselkedik,
+  // mintha a rablás-queue mindig üres lenne - semmilyen korábbi/beragadt
+  // jelzést nem jelenít meg, és a fázisváltásokat (success/failed/exhausted)
+  // sem dolgozza fel.
+  if (robberyDisabled) {
+    liveEl.classList.remove('show'); listEl.innerHTML = '';
+    bannerEl.classList.remove('show');
+    document.getElementById('dl-robbery-badge').classList.remove('show');
+    lastRobberyPhase = robberyPhase; lastRobberyIndex = robberyCurrentIndex; lastRobberyQueueLen = 0;
+    return;
+  }
 
   // --- Élő jelentkezési lista (csak visszaszámlálás/időzítő futása közben) ---
   const timerRunning = lastGameStatus === 'running';
@@ -2327,6 +2366,47 @@ function initFirebase() {
       lastNewGameSignal = v;
       if (!isStale) { pushLog('🆕 Új játék indult - session nullázva'); IntroKit.play(() => AudioLibrary.resetAllPlayed()); }
     });
+
+    // GM App "Hangeffektek állj" gombja - azonnal leállítja a jelenleg szóló
+    // egyéni (feltöltött) hangokat, mind a háttérzenét, mind az esemény-hangot.
+    let lastStopSoundsSignal = null;
+    db.ref('activityControl/stopSoundsSignal').on('value', snap => {
+      const v = snap.val();
+      if (v == null || v === lastStopSoundsSignal) return;
+      lastStopSoundsSignal = v;
+      AudioLibrary.stopAmbient();
+      AudioLibrary.stopEvent();
+      pushLog('🔇 Hangeffektek leállítva (GM App gombjából)');
+    });
+
+    // GM App "Győztes!" gombja - a kivetítő jeleníti meg a győztes-overlay-t
+    let lastWinnerSignal = null;
+    db.ref('activityControl/winnerSignal').on('value', snap => {
+      const v = snap.val();
+      if (v == null || v === lastWinnerSignal) return;
+      lastWinnerSignal = v;
+      showWinner();
+    });
+
+    // GM App "Rablás letiltása" kapcsolója - vészhelyzeti kikapcsoló, ha a
+    // Rabló App/jelzései beragadnak. Amíg igaz, a kivetítő figyelmen kívül
+    // hagy minden rablás-jelentkezést (a Rabló App maga is letiltja a
+    // gombot, ha látja ezt a jelzőt).
+    robberyDisabled = false;
+    db.ref('activityControl/robberyDisabled').on('value', snap => {
+      robberyDisabled = !!snap.val();
+      renderRobbery();
+    });
+
+    // GM App csapatkezelő parancsai (átnevezés/törlés játék közben) - ugyanaz
+    // a minta, mint a pont-parancsoknál: push → feldolgozás → törlés.
+    const teamCmdStartTs = Date.now();
+    db.ref('activityControl/teamCommandQueue').on('child_added', snap => {
+      const cmd = snap.val();
+      snap.ref.remove().catch(() => {});
+      if (!cmd || cmd.ts < teamCmdStartTs - 2000) return;
+      applyTeamCommand(cmd);
+    });
   } catch (e) {
     pushLog(`⚠️ Firebase init hiba: ${e.message || e}`);
     console.error('Firebase init hiba:', e);
@@ -2449,13 +2529,15 @@ function renderScoreboardState(data) {
         if (solved) soundCheer(); else soundBuzzer();
         AudioLibrary.playEvent(catId, slot);
       }
-      // 10 másodperc múlva a scoreboard magától "kattint": elrejti az eredményt,
+      // 9 másodperc múlva a scoreboard magától "kattint": elrejti az eredményt,
       // hozzáadja a pontot a csapathoz, majd indítja az 5 mp-es következő-csapat folyamatot.
+      // (1 mp-cel korábban, mint korábban, hogy a pont-effektus hamarabb jöjjön
+      // a helyes megoldás kiírása után.)
       if (autoDismissTimer) clearTimeout(autoDismissTimer);
       autoDismissTimer = setTimeout(() => {
         autoDismissTimer = null;
         dismissGameResult();
-      }, 10000);
+      }, 9000);
     }
     lastTimeLeft = null;
 
@@ -2792,7 +2874,12 @@ const DrawLayer = (() => {
       resize();
     }
     setLocked(!!opts.locked);
-    if (opts.locked) setReadyText('Felkészültél?', false);
+    // Csak FRISS megnyitáskor írjuk ki a "Felkészültél?" szöveget - ha a
+    // réteg már nyitva volt (pl. mert épp fut a 3-2-1 visszaszámlálás),
+    // ez felülírta volna a CountdownFX által kiírt "3"-at "Felkészültél?"-re,
+    // ha közben egy újabb (redundáns) 'ready' Firebase-frissítés érkezett -
+    // emiatt tűnt úgy, hogy a visszaszámlálás rögtön 2-nél kezdődik.
+    if (opts.locked && !wasOpen) setReadyText('Felkészültél?', false);
   }
   function close() { layer.classList.remove('open'); setLocked(false); }
   function isOpen() { return layer.classList.contains('open'); }
@@ -2964,7 +3051,7 @@ const AudioLibrary = (() => {
   // hangerőn indul), de max 10 mp-ig tarthat, VAGY addig, amíg a következő
   // feladvány el nem indul (amelyik előbb bekövetkezik) - onnantól 1 mp
   // alatt elhalkul, nem vágjuk le csattanva.
-  const EVENT_MAX_MS = 10000;
+  const EVENT_MAX_MS = 5000;
   let currentEventAudio = null;
   let eventStopTimer = null;
 
