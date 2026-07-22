@@ -1026,7 +1026,7 @@ html,body{height:100%;background:var(--bg);color:#fff;font-family:'Nunito',sans-
 
 <!-- Firebase kapcsolat-jelző pont -->
 <div id="fb-status"></div>
-<div style="position:fixed;bottom:6px;right:9px;z-index:45;font-size:10px;color:rgba(255,255,255,.28);pointer-events:none;font-family:'Nunito',sans-serif">v2.12</div>
+<div style="position:fixed;bottom:6px;right:9px;z-index:45;font-size:10px;color:rgba(255,255,255,.28);pointer-events:none;font-family:'Nunito',sans-serif">v2.13</div>
 
 <!-- Hangkönyvtár - diszkrét gomb, csak ide kell feltölteni a szituációs
      zenéket, mert a lejátszás is ezen az eszközön történik. -->
@@ -1983,6 +1983,15 @@ let currentCategoryId = '';   // az aktuális kör kategóriája - a rablás-han
 // késleltetett rablás-írás előtt ellenőrizzük, hogy még ugyanaz az epoch
 // van-e érvényben - ha nem, a késői írás egyszerűen elmarad.
 let robberyEpoch = 0;
+// Ha egy telefon átmenetileg elveszti a netkapcsolatot, a Firebase a
+// rablás-jelentkezését HELYBEN pufferelheti, és csak percekkel/körökkel
+// később, a kapcsolat visszaálltakor küldi el ténylegesen - így egy RÉGI
+// kör jelentkezése "kísértetként" landolhat egy vadonatúj kör elején (pl.
+// rögtön 3 rablás jelenik meg, amint elindul egy friss feladvány). Ez ellen
+// védekezünk: minden rablás-bejegyzést eldobunk, ami régebbi, mint amikor
+// a JELENLEGI kör elindult - így egy késve megérkező, elavult jelentkezés
+// sosem tud "belógni" egy új körbe.
+let roundStartTs = 0;
 let lastTimeLeft   = null;
 
 // Az időzítő megjelenítése/hangja SAJÁT, pontosan 1 mp-es helyi ütemben fut,
@@ -2090,6 +2099,22 @@ function attachRobberyListener() {
   fbDb.ref('activityRobbery').on('value', snap => {
     const raw = snap.val() || {};
     const queueObj = raw.queue || {};
+    // Egy átmenetileg netkapcsolat nélküli telefon a Firebase-jelentkezését
+    // HELYBEN pufferelheti, és csak percekkel/körökkel később küldi el
+    // ténylegesen - ez egy RÉGI kör "kísértet" jelentkezéseként landolhatna
+    // egy vadonatúj körben. Minden ilyen, a jelenlegi kör kezdete előttről
+    // származó bejegyzést kitörlünk magából a Firebase-ből is (nem csak
+    // vizuálisan elrejtjük), hogy a GM App és a kivetítő indexelése
+    // (currentIndex) mindig ugyanarra a - már megtisztított - listára
+    // mutasson.
+    const cutoff = roundStartTs - 5000;
+    Object.entries(queueObj).forEach(([key, entry]) => {
+      if (entry && typeof entry.ts === 'number' && entry.ts < cutoff) {
+        fbDb.ref('activityRobbery/queue/' + key).remove().catch(() => {});
+        delete queueObj[key];
+        pushLog(`🧹 Elavult rablás-jelentkezés törölve: ${entry.teamName || entry.teamId}`);
+      }
+    });
     robberyQueue = Object.values(queueObj).sort((a, b) => a.ts - b.ts);
     robberyCurrentIndex = (typeof raw.currentIndex === 'number') ? raw.currentIndex : -1;
     robberyPhase = raw.phase || 'collecting';
@@ -2476,7 +2501,7 @@ function renderScoreboardState(data) {
     const isFreshRound = (lastGameStatus !== 'running');
     const totalMismatch = (total !== localTotalValue);
     if (isFreshRound || totalMismatch) {
-      if (isFreshRound) { robberyEpoch++; soundTimerStart(); AudioLibrary.stopEvent(); AudioLibrary.playLoopingPool(catId, 'feladatok'); }
+      if (isFreshRound) { robberyEpoch++; roundStartTs = Date.now(); soundTimerStart(); AudioLibrary.stopEvent(); AudioLibrary.playLoopingPool(catId, 'feladatok'); }
       stopLocalTimerTick();
       localTotalValue = total;
       localLeftValue = left;
